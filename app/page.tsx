@@ -66,7 +66,7 @@ export default function Dashboard() {
             </tr>
           </thead>
           <tbody className="bg-white divide-y divide-gray-200">
-            {vehicles.map((vehicle: any[]) => (
+            {vehicles.map((vehicle: any) => (
               <tr key={vehicle.id} className="hover:bg-gray-50">
                 <td className="px-6 py-4 whitespace-nowrap font-medium">{vehicle.vehicle_uid}</td>
                 <td className="px-6 py-4 whitespace-nowrap">{vehicle.vehicle_type_name}</td>
