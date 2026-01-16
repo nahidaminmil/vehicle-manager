@@ -26,7 +26,7 @@ export default function Dashboard() {
     setLoading(false)
   }
 
-  function calculateStats(data) {
+  function calculateStats(data: any[]) {
     const total = data.length
     const active = data.filter(v => v.status === 'Active').length
     const inactive = data.filter(v => v.status === 'Inactive').length
@@ -66,7 +66,7 @@ export default function Dashboard() {
             </tr>
           </thead>
           <tbody className="bg-white divide-y divide-gray-200">
-            {vehicles.map((vehicle: any) => (
+            {vehicles.map((vehicle: any[]) => (
               <tr key={vehicle.id} className="hover:bg-gray-50">
                 <td className="px-6 py-4 whitespace-nowrap font-medium">{vehicle.vehicle_uid}</td>
                 <td className="px-6 py-4 whitespace-nowrap">{vehicle.vehicle_type_name}</td>
@@ -92,7 +92,7 @@ export default function Dashboard() {
   )
 }
 
-function StatCard({ title, value, icon, color }: any) {
+function StatCard({ title, value, icon, color }: any[]) {
   return (
     <div className={`${color} rounded-lg p-5 text-white flex items-center shadow-lg`}>
       <div className="mr-4 opacity-80">{icon}</div>
