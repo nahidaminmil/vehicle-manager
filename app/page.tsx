@@ -4,7 +4,7 @@ import { supabase } from '@/lib/supabase'
 import { Car, AlertTriangle, CheckCircle, XCircle } from 'lucide-react'
 
 export default function Dashboard() {
-  const [vehicles, setVehicles] = useState([])
+  const [vehicles, setVehicles] = useState<any[]>([])
   const [stats, setStats] = useState({ total: 0, active: 0, inactive: 0, critical: 0 })
   const [loading, setLoading] = useState(true)
 
