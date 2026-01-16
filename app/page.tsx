@@ -92,7 +92,7 @@ export default function Dashboard() {
   )
 }
 
-function StatCard({ title, value, icon, color }: any[]) {
+function StatCard({ title, value, icon, color }: any) {
   return (
     <div className={`${color} rounded-lg p-5 text-white flex items-center shadow-lg`}>
       <div className="mr-4 opacity-80">{icon}</div>
