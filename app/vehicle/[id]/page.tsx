@@ -42,7 +42,6 @@ export default function VehicleDetails() {
         const canvas = document.createElement('canvas')
         const MAX_WIDTH = 1200
         const scaleSize = MAX_WIDTH / img.width
-        // Only resize if image is massive
         const newWidth = (img.width > MAX_WIDTH) ? MAX_WIDTH : img.width
         const newHeight = (img.width > MAX_WIDTH) ? (img.height * scaleSize) : img.height
         
@@ -51,7 +50,6 @@ export default function VehicleDetails() {
         const ctx = canvas.getContext('2d')
         ctx?.drawImage(img, 0, 0, newWidth, newHeight)
         
-        // Compress to JPEG at 70% quality
         canvas.toBlob((blob) => {
           resolve(blob as Blob)
         }, 'image/jpeg', 0.7)
@@ -67,13 +65,11 @@ export default function VehicleDetails() {
       
       setUploading(true)
 
-      // A. Resize the image first
+      // A. Resize
       const resizedBlob = await resizeImage(file)
       
-      // Create filename
+      // B. Upload
       const fileName = `${vehicle.id}_${Date.now()}.jpg`
-
-      // B. Upload to 'vehicle-media'
       const { error: uploadError } = await supabase.storage
         .from('vehicle-media') 
         .upload(fileName, resizedBlob, {
@@ -83,12 +79,12 @@ export default function VehicleDetails() {
 
       if (uploadError) throw uploadError
 
-      // C. Get Public URL
+      // C. Get URL
       const { data: { publicUrl } } = supabase.storage
         .from('vehicle-media')
         .getPublicUrl(fileName)
 
-      // D. Save to Database
+      // D. Save to DB
       const { error: dbError } = await supabase
         .from('vehicles')
         .update({ vehicle_image_url: publicUrl })
@@ -100,14 +96,14 @@ export default function VehicleDetails() {
       window.location.reload()
 
     } catch (error) {
-      alert('Error uploading image. Check your internet or permissions.')
+      alert('Error uploading image.')
       console.error(error)
     } finally {
       setUploading(false)
     }
   }
 
-  // 3. Update Status Function
+  // 3. Update Status
   async function handleUpdateStatus() {
     if (!vehicle) return
     const inactiveDate = newStatus === 'Inactive' ? new Date().toISOString() : null
@@ -124,7 +120,7 @@ export default function VehicleDetails() {
     }
   }
 
-  // 4. Add Log Function
+  // 4. Add Log
   async function handleAddLog() {
     if (!remark) return alert('Please write a remark first')
     const { error } = await supabase
@@ -152,23 +148,21 @@ export default function VehicleDetails() {
         <ArrowLeft className="w-5 h-5 mr-2" /> Back to Dashboard
       </button>
 
-      {/* Image Banner */}
-      {/* 1. aspect-[4/3] keeps the box shape fixed like a standard photo */}
-{/* 2. bg-black looks better for photos */}
-<div className="relative w-full aspect-[4/3] md:aspect-video bg-black rounded-t-lg overflow-hidden">
-   <img 
-      src={vehicle.vehicle_image_url ? `${vehicle.vehicle_image_url}?t=${Date.now()}` : 'https://placehold.co/600x400?text=No+Image'} 
-      
-      /* 3. object-contain ensures the WHOLE car fits inside the box */
-      className="w-full h-full object-contain"
-      alt="Vehicle"
-   />
+      {/* Image Banner - UPDATED ASPECT RATIO SECTION */}
+      <div className="bg-white rounded-lg shadow-lg overflow-hidden mb-6">
+        <div className="relative w-full aspect-[4/3] md:aspect-video bg-black rounded-t-lg overflow-hidden">
+           <img 
+              src={vehicle.vehicle_image_url ? `${vehicle.vehicle_image_url}?t=${Date.now()}` : 'https://placehold.co/600x400?text=No+Image'} 
+              className="w-full h-full object-contain"
+              alt="Vehicle"
+           />
            <label className="absolute bottom-4 right-4 bg-blue-600 hover:bg-blue-700 text-white p-3 rounded-full cursor-pointer shadow-lg flex items-center">
              <Camera className="w-6 h-6" />
              <input type="file" accept="image/*" className="hidden" onChange={handleImageUpload} disabled={uploading} />
              <span className="ml-2 font-bold text-sm">{uploading ? 'Processing...' : 'Update Photo'}</span>
            </label>
         </div>
+        
         <div className="p-6 border-b border-gray-100">
           <h1 className="text-3xl font-bold text-gray-900">{vehicle.vehicle_uid}</h1>
           <p className="text-gray-500 mt-1">{vehicle.tob} • {vehicle.status}</p>
