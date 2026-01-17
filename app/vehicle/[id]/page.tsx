@@ -135,7 +135,7 @@ export default function VehicleDetails() {
     try {
       const file = event.target.files[0]; if (!file) return; setUploading(true)
       // Force user to select the log first if they haven't
-      if(!logId) { alert("Please submit the log text first, then add photos to it in the history list below."); return;}
+      if(!logId) { alert("Error: No log selected."); return;}
 
       const blob = await resizeImage(file)
       const fileName = `log_${logId}_${Date.now()}.jpg`
@@ -181,7 +181,7 @@ export default function VehicleDetails() {
     if (!remark) return alert('Please write a fault description first.')
     // Create the log entry
     const { error } = await supabase.from('maintenance_logs').insert({ vehicle_id: vehicle.id, description: remark, priority, action_required: actionReq, responsible_person: responsible, status: 'Pending' })
-    if(error) alert("Error adding log")
+    if(error) alert("Error adding log: " + error.message)
     else { 
         alert('Log Text Added. Scroll down to "Maintenance History" to add photos to this log.'); 
         setRemark(''); setActionReq(''); setResponsible(''); fetchData() 
@@ -229,7 +229,7 @@ export default function VehicleDetails() {
       </div>
 
 
-      {/* ================= SECTION 2: VEHICLE IDENTITY & STATS (RESTORED!) ================= */}
+      {/* ================= SECTION 2: VEHICLE IDENTITY & STATS (ALL FIELDS RESTORED) ================= */}
       <div className="bg-white rounded-lg shadow-md p-6 mb-6">
         <div className="flex justify-between items-center mb-4 border-b border-gray-100 pb-3">
             <h2 className="text-xl font-black text-gray-900">Vehicle Identity & Stats</h2>
@@ -378,9 +378,9 @@ export default function VehicleDetails() {
                         <div className="flex justify-between items-center mb-3">
                             <h4 className="text-sm font-black text-gray-700 uppercase flex items-center"><ImageIcon className="w-4 h-4 mr-2"/> Evidence Photos</h4>
                             
-                            {/* THE ADD FAULT PHOTO BUTTON */}
-                            <label className="cursor-pointer text-xs font-bold text-blue-700 hover:text-white hover:bg-blue-600 flex items-center bg-white px-3 py-1.5 rounded-md shadow-sm border-2 border-blue-200 transition-all">
-                                <Plus className="w-4 h-4 mr-1"/> Add Photo to this Log
+                            {/* THE ADD FAULT PHOTO BUTTON (MADE VERY OBVIOUS NOW) */}
+                            <label className="cursor-pointer text-sm font-bold text-white bg-blue-600 hover:bg-blue-700 flex items-center px-4 py-2 rounded-md shadow-md transition-all">
+                                <Plus className="w-5 h-5 mr-2"/> Add Photo to this Log
                                 <input type="file" accept="image/*" className="hidden" onChange={(e) => handleLogUpload(e, log.id)} disabled={uploading} />
                             </label>
                         </div>
@@ -388,7 +388,7 @@ export default function VehicleDetails() {
                         {/* Photo Thumbnail Grid */}
                         <div className="flex flex-wrap gap-3">
                             {(!evidence[log.id] || evidence[log.id].length === 0) ? (
-                                <div className="text-sm text-gray-500 font-bold italic py-2 w-full text-center bg-white rounded border-2 border-dashed border-gray-300">No photos attached to this report.</div>
+                                <div className="text-sm text-gray-500 font-bold italic py-4 w-full text-center bg-white rounded border-2 border-dashed border-gray-300">No photos attached to this report yet. Click the blue button above to add one.</div>
                             ) : (
                                 evidence[log.id].map((pic: any) => (
                                     <div key={pic.id} className="relative w-24 h-24 group rounded-lg overflow-hidden shadow-sm border-2 border-white">
