@@ -2,7 +2,7 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase'
 import { useRouter } from 'next/navigation'
-import { Car, CheckCircle, XCircle, AlertTriangle, Plus, Search, BarChart3, Grid, LogOut } from 'lucide-react'
+import { Car, CheckCircle, XCircle, AlertTriangle, Plus, Search, BarChart3, Grid, LogOut, Users } from 'lucide-react'
 import Link from 'next/link'
 
 export default function Dashboard() {
@@ -11,6 +11,7 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true)
   const [errorMsg, setErrorMsg] = useState('') 
   const [filter, setFilter] = useState('')
+  const [role, setRole] = useState('') // New state to store user role
 
   useEffect(() => {
     async function checkUserAndFetch() {
@@ -28,6 +29,12 @@ export default function Dashboard() {
         .eq('id', user.id)
         .single()
 
+      // Save the role so we can decide whether to show the "Users" button
+      if (profile) {
+          setRole(profile.role)
+      }
+
+      // Security Redirect: Vehicle Users cannot see dashboard
       if (profile?.role === 'vehicle_user' && profile?.assigned_vehicle_id) {
         router.replace(`/vehicle/${profile.assigned_vehicle_id}`)
         return
@@ -85,12 +92,19 @@ export default function Dashboard() {
         </div>
         
         <div className="flex flex-wrap gap-3 w-full md:w-auto items-center">
-           {/* LOGOUT BUTTON (NEW) */}
+           {/* LOGOUT BUTTON */}
            <button onClick={handleLogout} className="flex-1 md:flex-none flex items-center justify-center bg-red-600 hover:bg-red-700 text-white px-4 py-3 rounded-lg font-bold shadow-md transition-colors mr-2">
              <LogOut className="w-5 h-5 mr-2" /> Sign Out
            </button>
 
            <div className="w-px h-10 bg-gray-300 hidden md:block mx-2"></div>
+
+           {/* SUPER ADMIN BUTTON (Only visible if role is 'super_admin') */}
+           {role === 'super_admin' && (
+                <Link href="/users" className="flex-1 md:flex-none flex items-center justify-center bg-purple-900 hover:bg-black text-white px-4 py-3 rounded-lg font-bold shadow-md transition-colors mr-2">
+                    <Users className="w-5 h-5 mr-2" /> Users
+                </Link>
+           )}
 
            <Link href="/all-vehicles" className="flex-1 md:flex-none flex items-center justify-center bg-gray-800 hover:bg-black text-white px-4 py-3 rounded-lg font-bold shadow-md transition-colors">
              <Grid className="w-5 h-5 mr-2" /> All Vehicles
