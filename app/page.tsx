@@ -11,7 +11,7 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true)
   const [errorMsg, setErrorMsg] = useState('') 
   const [filter, setFilter] = useState('')
-  const [role, setRole] = useState('') // New state to store user role
+  const [role, setRole] = useState('') // Stores 'super_admin', 'admin', etc.
 
   useEffect(() => {
     async function checkUserAndFetch() {
@@ -29,12 +29,11 @@ export default function Dashboard() {
         .eq('id', user.id)
         .single()
 
-      // Save the role so we can decide whether to show the "Users" button
       if (profile) {
-          setRole(profile.role)
+          setRole(profile.role) // <--- THIS IS CRITICAL FOR THE BUTTON
       }
 
-      // Security Redirect: Vehicle Users cannot see dashboard
+      // Redirect Vehicle Users away from dashboard
       if (profile?.role === 'vehicle_user' && profile?.assigned_vehicle_id) {
         router.replace(`/vehicle/${profile.assigned_vehicle_id}`)
         return
@@ -57,7 +56,6 @@ export default function Dashboard() {
     checkUserAndFetch()
   }, [])
 
-  // --- LOGOUT FUNCTION ---
   async function handleLogout() {
     await supabase.auth.signOut()
     router.push('/login')
@@ -92,14 +90,13 @@ export default function Dashboard() {
         </div>
         
         <div className="flex flex-wrap gap-3 w-full md:w-auto items-center">
-           {/* LOGOUT BUTTON */}
            <button onClick={handleLogout} className="flex-1 md:flex-none flex items-center justify-center bg-red-600 hover:bg-red-700 text-white px-4 py-3 rounded-lg font-bold shadow-md transition-colors mr-2">
              <LogOut className="w-5 h-5 mr-2" /> Sign Out
            </button>
 
            <div className="w-px h-10 bg-gray-300 hidden md:block mx-2"></div>
 
-           {/* SUPER ADMIN BUTTON (Only visible if role is 'super_admin') */}
+           {/* THE USERS BUTTON - Only shows for Super Admin */}
            {role === 'super_admin' && (
                 <Link href="/users" className="flex-1 md:flex-none flex items-center justify-center bg-purple-900 hover:bg-black text-white px-4 py-3 rounded-lg font-bold shadow-md transition-colors mr-2">
                     <Users className="w-5 h-5 mr-2" /> Users
@@ -172,7 +169,7 @@ export default function Dashboard() {
                 </tr>
               ))}
               {filteredVehicles.length === 0 && (
-                <tr><td colSpan={5} className="px-6 py-8 text-center text-gray-500 font-bold">No vehicles found (or Access Restricted).</td></tr>
+                <tr><td colSpan={5} className="px-6 py-8 text-center text-gray-500 font-bold">No vehicles found.</td></tr>
               )}
             </tbody>
           </table>

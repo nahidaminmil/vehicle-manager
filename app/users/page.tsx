@@ -4,7 +4,7 @@ import { supabase } from '@/lib/supabase'
 import { useRouter } from 'next/navigation'
 import { 
   ArrowLeft, UserPlus, Shield, Trash2, User, Truck, MapPin, 
-  Edit, Check, X, Loader2, Save 
+  Edit, X, Loader2, Save 
 } from 'lucide-react'
 
 export default function UserManagementPage() {
@@ -73,8 +73,7 @@ export default function UserManagementPage() {
     if (!newEmail || !newPassword) return alert('Email and Password required')
     setCreating(true)
 
-    // Note: In a real app, you'd use a server function to create users without logging yourself out.
-    // For this prototype, this might sign you in as the new user.
+    // Note: Creating a user client-side usually logs you in as them immediately.
     const { data: authData, error: authError } = await supabase.auth.signUp({
       email: newEmail,
       password: newPassword
@@ -87,7 +86,7 @@ export default function UserManagementPage() {
     }
 
     if (authData.user) {
-        // Update the Profile that was auto-created
+        // Update the Profile that was auto-created by the database trigger
         const updates: any = { role: newRole }
         if (newRole === 'tob_admin') updates.assigned_tob = newTob
         if (newRole === 'vehicle_user') updates.assigned_vehicle_id = newVehicleId
@@ -99,7 +98,7 @@ export default function UserManagementPage() {
         
         if (profileError) alert('Error updating profile details: ' + profileError.message)
         else {
-            alert('User Created Successfully!')
+            alert('User Created Successfully! (NOTE: You may have been switched to this new account. Please re-login as Admin if needed.)')
             fetchUsers()
             setNewEmail('')
             setNewPassword('')
