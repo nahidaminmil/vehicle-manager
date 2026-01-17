@@ -1,104 +1,154 @@
-'use client'
+"use client"
 import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase'
-import { Car, AlertTriangle, CheckCircle, XCircle } from 'lucide-react'
+import { Car, CheckCircle, XCircle, AlertTriangle, Plus, Search, BarChart3, Filter } from 'lucide-react'
+import Link from 'next/link'
 
 export default function Dashboard() {
   const [vehicles, setVehicles] = useState<any[]>([])
-  const [stats, setStats] = useState({ total: 0, active: 0, inactive: 0, critical: 0 })
   const [loading, setLoading] = useState(true)
+  const [filter, setFilter] = useState('')
 
   useEffect(() => {
-    fetchData()
-  }, [])
-
-  async function fetchData() {
-    // 1. Fetch data from the SQL View we created
-    const { data, error } = await supabase
-      .from('vehicle_dashboard_view')
-      .select('*')
-    
-    if (error) console.error('Error:', error)
-    else {
-      setVehicles(data)
-      calculateStats(data)
+    async function fetchVehicles() {
+      const { data, error } = await supabase
+        .from('vehicles')
+        .select(`*, vehicle_types (name)`)
+        .order('created_at', { ascending: false })
+      
+      if (error) console.error('Error:', error)
+      else setVehicles(data || [])
+      setLoading(false)
     }
-    setLoading(false)
-  }
+    fetchVehicles()
+  }, [])
 
   function calculateStats(data: any[]) {
     const total = data.length
     const active = data.filter(v => v.status === 'Active').length
     const inactive = data.filter(v => v.status === 'Inactive').length
-    // Count critical issues (using the logic from our SQL view)
-    const critical = data.filter(v => v.has_critical_fault).length
-    setStats({ total, active, inactive, critical })
+    // Critical: Inactive vehicles that are Non-Mission Capable or have pending high priority logs
+    const critical = data.filter(v => v.operational_category === 'Non-Mission Capable' || v.status === 'Inactive').length
+    return { total, active, inactive, critical }
   }
 
-  if (loading) return <div className="p-10">Loading Dashboard...</div>
+  const stats = calculateStats(vehicles)
+  const filteredVehicles = vehicles.filter(v => 
+    v.vehicle_uid.toLowerCase().includes(filter.toLowerCase()) ||
+    v.vehicle_types?.name.toLowerCase().includes(filter.toLowerCase()) ||
+    v.tob?.toLowerCase().includes(filter.toLowerCase())
+  )
+
+  if (loading) return <div className="p-8 text-xl font-bold text-gray-900">Loading Command Dashboard...</div>
 
   return (
-    <div className="min-h-screen bg-gray-50 p-8">
-      <header className="mb-8">
-        <h1 className="text-3xl font-bold text-gray-800">Vehicle Management System</h1>
-        <p className="text-gray-500">BANRDB, MONUSCO</p>
-      </header>
+    <div className="min-h-screen bg-gray-100 p-4 md:p-8">
+      
+      {/* Top Bar */}
+      <div className="flex flex-col md:flex-row justify-between items-center mb-8 gap-4">
+        <div>
+          <h1 className="text-3xl font-black text-gray-900 tracking-tight">COMMAND DASHBOARD</h1>
+          <p className="text-gray-800 font-medium">Military Vehicle Accountability System</p>
+        </div>
+        <div className="flex gap-3 w-full md:w-auto">
+           {/* Analytics Button */}
+           <Link href="/analytics" className="flex-1 md:flex-none flex items-center justify-center bg-purple-700 hover:bg-purple-800 text-white px-4 py-3 rounded-lg font-bold shadow-md transition-colors">
+             <BarChart3 className="w-5 h-5 mr-2" /> Analytics
+           </Link>
+           {/* Add Vehicle Button */}
+           <Link href="/add-vehicle" className="flex-1 md:flex-none flex items-center justify-center bg-blue-700 hover:bg-blue-800 text-white px-4 py-3 rounded-lg font-bold shadow-md transition-colors">
+             <Plus className="w-5 h-5 mr-2" /> Add Vehicle
+           </Link>
+        </div>
+      </div>
 
       {/* STATS CARDS */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
-        <StatCard title="Total Vehicles" value={stats.total} icon={<Car />} color="bg-blue-500" />
-        <StatCard title="Active" value={stats.active} icon={<CheckCircle />} color="bg-green-500" />
-        <StatCard title="Inactive" value={stats.inactive} icon={<XCircle />} color="bg-red-500" />
-        <StatCard title="Critical Attention" value={stats.critical} icon={<AlertTriangle />} color="bg-orange-500" />
+        <StatCard title="Total Fleet" value={stats.total} icon={<Car />} color="bg-blue-600" />
+        <StatCard title="Mission Ready" value={stats.active} icon={<CheckCircle />} color="bg-green-600" />
+        <StatCard title="Off Road" value={stats.inactive} icon={<XCircle />} color="bg-red-600" />
+        <StatCard title="Critical Attention" value={stats.critical} icon={<AlertTriangle />} color="bg-orange-600" />
       </div>
 
-      {/* VEHICLE LIST TABLE */}
-      <div className="bg-white rounded-lg shadow overflow-hidden">
-        <table className="min-w-full divide-y divide-gray-200">
-          <thead className="bg-gray-100">
-            <tr>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Vehicle ID</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Type</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Location (TOB)</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Days Inactive</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Action</th>
-            </tr>
-          </thead>
-          <tbody className="bg-white divide-y divide-gray-200">
-            {vehicles.map((vehicle: any) => (
-              <tr key={vehicle.id} className="hover:bg-gray-50">
-                <td className="px-6 py-4 whitespace-nowrap font-medium">{vehicle.vehicle_uid}</td>
-                <td className="px-6 py-4 whitespace-nowrap">{vehicle.vehicle_type_name}</td>
-                <td className="px-6 py-4 whitespace-nowrap">{vehicle.tob}</td>
-                <td className="px-6 py-4 whitespace-nowrap">
-                  <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full 
-                    ${vehicle.status === 'Active' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
-                    {vehicle.status}
-                  </span>
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap text-gray-500">
-                  {vehicle.days_inactive > 0 ? `${vehicle.days_inactive} days` : '-'}
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap text-blue-600 hover:text-blue-900 cursor-pointer">
-                  <a href={`/vehicle/${vehicle.id}`}>View / Edit</a>
-                </td>
+      {/* Main List Section */}
+      <div className="bg-white rounded-xl shadow-lg border border-gray-200 overflow-hidden">
+        
+        {/* Search Bar */}
+        <div className="p-5 border-b border-gray-200 bg-gray-50 flex items-center">
+          <Search className="w-5 h-5 text-gray-600 mr-3" />
+          <input 
+            type="text" 
+            placeholder="Search by Vehicle ID, Type, or TOB..." 
+            className="w-full bg-transparent outline-none text-gray-900 font-bold placeholder-gray-500"
+            onChange={(e) => setFilter(e.target.value)}
+          />
+        </div>
+
+        {/* TABLE WRAPPER FOR SCROLLING */}
+        <div className="overflow-x-auto">
+          <table className="w-full text-left border-collapse">
+            <thead className="bg-gray-100 text-gray-900 uppercase text-sm font-extrabold tracking-wider">
+              <tr>
+                <th className="px-6 py-4 border-b border-gray-200">Vehicle ID</th>
+                <th className="px-6 py-4 border-b border-gray-200">Type</th>
+                <th className="px-6 py-4 border-b border-gray-200">Location (TOB)</th>
+                <th className="px-6 py-4 border-b border-gray-200">Status</th>
+                <th className="px-6 py-4 border-b border-gray-200 text-right">Action</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody className="divide-y divide-gray-200 bg-white">
+              {filteredVehicles.map((vehicle: any) => (
+                <tr key={vehicle.id} className="hover:bg-blue-50 transition-colors">
+                  <td className="px-6 py-4 font-black text-gray-900 whitespace-nowrap">
+                    {vehicle.vehicle_uid}
+                  </td>
+                  <td className="px-6 py-4 font-bold text-gray-800 whitespace-nowrap">
+                    {vehicle.vehicle_types?.name}
+                  </td>
+                  <td className="px-6 py-4 font-bold text-gray-800 whitespace-nowrap">
+                    {vehicle.tob || '---'}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wide ${
+                      vehicle.status === 'Active' 
+                        ? 'bg-green-100 text-green-800 border border-green-200' 
+                        : 'bg-red-100 text-red-800 border border-red-200'
+                    }`}>
+                      {vehicle.status === 'Active' ? '● Ready' : '● Inactive'}
+                    </span>
+                  </td>
+                  <td className="px-6 py-4 text-right whitespace-nowrap">
+                    <Link href={`/vehicle/${vehicle.id}`} className="inline-block bg-gray-900 hover:bg-black text-white px-4 py-2 rounded-md font-bold text-sm shadow">
+                      View / Edit
+                    </Link>
+                  </td>
+                </tr>
+              ))}
+              {filteredVehicles.length === 0 && (
+                <tr>
+                  <td colSpan={5} className="px-6 py-8 text-center text-gray-500 font-bold">
+                    No vehicles found.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
       </div>
     </div>
   )
 }
 
+// Simple Stat Card Component
 function StatCard({ title, value, icon, color }: any) {
   return (
-    <div className={`${color} rounded-lg p-5 text-white flex items-center shadow-lg`}>
-      <div className="mr-4 opacity-80">{icon}</div>
+    <div className={`${color} rounded-lg shadow-lg p-5 text-white flex items-center justify-between`}>
       <div>
-        <h3 className="text-lg font-bold">{value}</h3>
-        <p className="text-sm opacity-90">{title}</p>
+        <p className="text-sm font-medium opacity-90 uppercase">{title}</p>
+        <p className="text-3xl font-black mt-1">{value}</p>
+      </div>
+      <div className="p-3 bg-white/20 rounded-full">
+        {icon}
       </div>
     </div>
   )
