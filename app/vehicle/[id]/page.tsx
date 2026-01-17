@@ -2,7 +2,7 @@
 import { useEffect, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
-import { ArrowLeft, CheckCircle, AlertTriangle, Camera, Wrench, CheckSquare, Clock, Edit2, X, Save, QrCode } from 'lucide-react'
+import { ArrowLeft, CheckCircle, AlertTriangle, Camera, Wrench, CheckSquare, Clock, Edit2, X, Save } from 'lucide-react'
 
 export default function VehicleDetails() {
   const { id } = useParams()
@@ -27,33 +27,37 @@ export default function VehicleDetails() {
   // Status & Logs State
   const [uploading, setUploading] = useState(false)
   const [newStatus, setNewStatus] = useState('')
-  const [inactiveDate, setInactiveDate] = useState('') // YYYY-MM-DD
+  const [inactiveDate, setInactiveDate] = useState('')
   const [remark, setRemark] = useState('')
   const [actionReq, setActionReq] = useState('')
   const [responsible, setResponsible] = useState('')
   const [priority, setPriority] = useState('Routine')
 
-  // Lists
   const tobList = ['NDROMO', 'BAYOO', 'RHOO', 'DRODRO']
   const opCats = ['Fully Mission Capable', 'Degraded', 'Non-Mission Capable']
 
   // 1. Fetch Data
   async function fetchData() {
+    // A. Get Vehicle Details (FROM VIEW for safety)
     const { data: vehicleData, error: vError } = await supabase
-      .from('vehicles')
-      .select(`*, vehicle_types (id, name)`)
+      .from('vehicle_dashboard_view')
+      .select('*')
       .eq('id', id)
       .single()
 
+    // B. Get Types (For Dropdown)
     const { data: typesData } = await supabase.from('vehicle_types').select('*')
+
+    // C. Get Logs
     const { data: logData } = await supabase
       .from('maintenance_logs')
       .select('*')
       .eq('vehicle_id', id)
       .order('created_at', { ascending: false })
 
-    if (vError) console.error(vError)
-    else {
+    if (vError) {
+        console.error("Fetch Error:", vError)
+    } else {
       setVehicle(vehicleData)
       setNewStatus(vehicleData.status)
       setTypes(typesData || [])
@@ -63,12 +67,12 @@ export default function VehicleDetails() {
       setEditFormData({
         vehicle_uid: vehicleData.vehicle_uid || '',
         tob: vehicleData.tob || 'NDROMO',
-        vehicle_type_id: vehicleData.vehicle_type_id || '',
+        vehicle_type_id: vehicleData.vehicle_type_id || '', // Now available from View
         mileage: vehicleData.mileage || 0,
         operational_category: vehicleData.operational_category || 'Fully Mission Capable'
       })
 
-      // Format Inactive Date for DatePicker (YYYY-MM-DD)
+      // Format Date
       if (vehicleData.inactive_since) {
         setInactiveDate(new Date(vehicleData.inactive_since).toISOString().split('T')[0])
       } else {
@@ -144,18 +148,16 @@ export default function VehicleDetails() {
     else { setIsEditing(false); fetchData() }
   }
 
-  // 4. Update Status (With Date Picker Support)
+  // 4. Update Status
   async function handleUpdateStatus() {
     if (!vehicle) return
-    // If Active -> Clear date. If Inactive -> Use picked date or today
     const dateToSave = newStatus === 'Inactive' ? (new Date(inactiveDate).toISOString()) : null
-    
     const { error } = await supabase.from('vehicles').update({ status: newStatus, inactive_since: dateToSave }).eq('id', vehicle.id)
     if (error) alert('Error updating status')
     else { alert('Status Updated!'); router.refresh(); window.location.reload() }
   }
 
-  // 5. Add Detailed Log
+  // 5. Add Log
   async function handleAddLog() {
     if (!remark) return alert('Please write a fault description')
     const { error } = await supabase.from('maintenance_logs').insert({
@@ -176,8 +178,8 @@ export default function VehicleDetails() {
     if (error) alert('Error updating log'); else fetchData()
   }
 
-  if (loading) return <div className="p-8">Loading...</div>
-  if (!vehicle) return <div className="p-8">Vehicle not found</div>
+  if (loading) return <div className="p-8">Loading Vehicle Data...</div>
+  if (!vehicle) return <div className="p-8">Vehicle not found (ID: {id})</div>
 
   return (
     <div className="min-h-screen bg-gray-50 p-4 pb-20">
@@ -198,11 +200,6 @@ export default function VehicleDetails() {
              <input type="file" accept="image/*" className="hidden" onChange={handleImageUpload} disabled={uploading} />
              <span className="ml-2 font-bold text-sm">{uploading ? 'Processing...' : 'Update Photo'}</span>
            </label>
-           
-           {/* QR Code Button (Placeholder for Phase 6) */}
-           <button className="absolute top-4 right-4 bg-white/90 text-gray-800 p-2 rounded shadow-md flex items-center text-xs font-bold" onClick={() => alert('QR Code Generation coming in Phase 6!')}>
-              <QrCode className="w-4 h-4 mr-1" /> QR ID
-           </button>
         </div>
       </div>
 
@@ -227,54 +224,61 @@ export default function VehicleDetails() {
             <div>
                 <label className="block text-xs font-bold text-gray-500 uppercase">Vehicle ID</label>
                 {isEditing ? (
-                    <input type="text" value={editFormData.vehicle_uid} onChange={(e) => setEditFormData({...editFormData, vehicle_uid: e.target.value})} className="w-full mt-1 p-2 border rounded"/>
-                ) : <p className="font-medium">{vehicle.vehicle_uid || '---'}</p>}
+                    <input type="text" value={editFormData.vehicle_uid} onChange={(e) => setEditFormData({...editFormData, vehicle_uid: e.target.value})} className="w-full mt-1 p-2 border rounded font-bold"/>
+                ) : <p className="font-bold text-lg">{vehicle.vehicle_uid || '---'}</p>}
             </div>
 
-            {/* TOB (Specific Dropdown) */}
+            {/* TOB */}
             <div>
-                <label className="block text-xs font-bold text-gray-500 uppercase">TOB Location</label>
+                <label className="block text-xs font-bold text-gray-500 uppercase">Location (TOB)</label>
                 {isEditing ? (
                     <select value={editFormData.tob} onChange={(e) => setEditFormData({...editFormData, tob: e.target.value})} className="w-full mt-1 p-2 border rounded">
                         {tobList.map(t => <option key={t} value={t}>{t}</option>)}
                     </select>
-                ) : <p className="font-medium">{vehicle.tob || '---'}</p>}
+                ) : <p className="font-bold text-lg">{vehicle.tob || '---'}</p>}
             </div>
 
-            {/* Mileage (New Field) */}
+             {/* Type */}
+             <div>
+                <label className="block text-xs font-bold text-gray-500 uppercase">Vehicle Type</label>
+                {isEditing ? (
+                    <select value={editFormData.vehicle_type_id} onChange={(e) => setEditFormData({...editFormData, vehicle_type_id: e.target.value})} className="w-full mt-1 p-2 border rounded">
+                        {types.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+                    </select>
+                ) : <p className="font-bold text-lg">{vehicle.vehicle_type_name || '---'}</p>}
+            </div>
+
+            {/* Mileage */}
             <div>
                 <label className="block text-xs font-bold text-gray-500 uppercase">Mileage (KM)</label>
                 {isEditing ? (
-                    <input type="number" value={editFormData.mileage} onChange={(e) => setEditFormData({...editFormData, mileage: Number(e.target.value)})} className="w-full mt-1 p-2 border rounded"/>
-                ) : <p className="font-medium">{vehicle.mileage ? `${vehicle.mileage.toLocaleString()} km` : '0 km'}</p>}
+                    <input type="number" value={editFormData.mileage} onChange={(e) => setEditFormData({...editFormData, mileage: Number(e.target.value)})} className="w-full mt-1 p-2 border rounded font-bold"/>
+                ) : <p className="font-bold text-lg">{vehicle.mileage ? `${vehicle.mileage.toLocaleString()} km` : '0 km'}</p>}
             </div>
 
-            {/* Op Category (New Field) */}
-            <div>
+            {/* Op Category */}
+            <div className="md:col-span-2">
                 <label className="block text-xs font-bold text-gray-500 uppercase">Op. Category</label>
                 {isEditing ? (
                     <select value={editFormData.operational_category} onChange={(e) => setEditFormData({...editFormData, operational_category: e.target.value})} className="w-full mt-1 p-2 border rounded">
                         {opCats.map(c => <option key={c} value={c}>{c}</option>)}
                     </select>
-                ) : <span className={`px-2 py-1 text-xs font-bold rounded ${vehicle.operational_category === 'Fully Mission Capable' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
+                ) : <span className={`px-2 py-1 text-sm font-bold rounded ${vehicle.operational_category === 'Fully Mission Capable' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
                     {vehicle.operational_category || 'Fully Mission Capable'}
                 </span>}
             </div>
         </div>
       </div>
 
-      {/* 3. Status Manager (Days Inactive Calc) */}
+      {/* 3. Status Manager */}
       <div className="bg-white p-6 rounded-lg shadow-md mb-6">
           <h2 className="text-xl font-bold mb-4 flex items-center"><CheckCircle className="w-6 h-6 mr-2 text-green-600" /> Update Status</h2>
-          
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-             <select value={newStatus} onChange={(e) => setNewStatus(e.target.value)} className="block w-full p-3 border border-gray-300 rounded-md">
+             <select value={newStatus} onChange={(e) => setNewStatus(e.target.value)} className="block w-full p-3 border border-gray-300 rounded-md font-bold">
                 <option value="Active">🟢 Active</option>
                 <option value="Inactive">🔴 Inactive</option>
                 <option value="Maintenance">🟠 Maintenance</option>
              </select>
-             
-             {/* Date Picker (Only shows if Inactive) */}
              {newStatus === 'Inactive' && (
                  <div>
                     <label className="text-xs font-bold text-gray-500">Inactive Since:</label>
@@ -282,30 +286,19 @@ export default function VehicleDetails() {
                  </div>
              )}
           </div>
-          
-          {/* Days Inactive Display */}
-          {newStatus === 'Inactive' && (
-             <div className="bg-red-50 text-red-700 p-3 rounded mb-4 text-center font-bold border border-red-200">
-                ⚠️ Vehicle Inactive for {getDaysInactive()} Days
-             </div>
-          )}
-
           <button onClick={handleUpdateStatus} className="w-full py-3 bg-blue-600 text-white rounded-md font-bold hover:bg-blue-700">Save Status Change</button>
       </div>
 
       {/* 4. Detailed Fault Reporting */}
       <div className="bg-white p-6 rounded-lg shadow-md mb-6">
           <h2 className="text-xl font-bold mb-4 flex items-center"><AlertTriangle className="w-6 h-6 mr-2 text-orange-500" /> Report Issue</h2>
-          
-          <textarea value={remark} onChange={(e) => setRemark(e.target.value)} className="w-full p-3 border border-gray-300 rounded-md h-24 mb-3" placeholder="Fault Description..." />
-          
+          <textarea value={remark} onChange={(e) => setRemark(e.target.value)} className="w-full p-3 border border-gray-300 rounded-md h-24 mb-3 font-medium" placeholder="Fault Description..." />
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3">
              <input type="text" value={actionReq} onChange={(e) => setActionReq(e.target.value)} className="p-3 border rounded-md" placeholder="Required Action" />
              <input type="text" value={responsible} onChange={(e) => setResponsible(e.target.value)} className="p-3 border rounded-md" placeholder="Person Responsible" />
           </div>
-
           <div className="flex gap-4">
-            <select value={priority} onChange={(e) => setPriority(e.target.value)} className="w-1/3 p-3 border rounded-md">
+            <select value={priority} onChange={(e) => setPriority(e.target.value)} className="w-1/3 p-3 border rounded-md font-bold">
               <option value="Routine">Routine</option>
               <option value="Critical">🔥 Critical</option>
             </select>
@@ -321,17 +314,17 @@ export default function VehicleDetails() {
         </div>
         <div className="divide-y divide-gray-100">
             {logs.length === 0 ? (
-                <div className="p-6 text-center text-gray-500">No maintenance records found.</div>
+                <div className="p-6 text-center text-gray-500 font-bold">No maintenance records found.</div>
             ) : (
                 logs.map((log) => (
                     <div key={log.id} className="p-4 hover:bg-gray-50">
                         <div className="flex flex-col md:flex-row justify-between items-start mb-2">
                              <div className="flex items-center gap-2 mb-1">
                                 <span className={`px-2 py-0.5 text-xs font-bold rounded-full ${log.priority === 'Critical' ? 'bg-red-100 text-red-800' : 'bg-blue-100 text-blue-800'}`}>{log.priority}</span>
-                                <span className="text-xs text-gray-400 flex items-center"><Clock className="w-3 h-3 mr-1" />{new Date(log.created_at).toLocaleDateString()}</span>
+                                <span className="text-xs text-gray-400 flex items-center font-bold"><Clock className="w-3 h-3 mr-1" />{new Date(log.created_at).toLocaleDateString()}</span>
                             </div>
                             {log.status !== 'Resolved' && (
-                                <button onClick={() => resolveLog(log.id)} className="flex items-center px-3 py-1 bg-green-600 text-white text-xs rounded hover:bg-green-700 transition-colors"><CheckSquare className="w-3 h-3 mr-1" /> Mark Done</button>
+                                <button onClick={() => resolveLog(log.id)} className="flex items-center px-3 py-1 bg-green-600 text-white text-xs rounded hover:bg-green-700 transition-colors font-bold"><CheckSquare className="w-3 h-3 mr-1" /> Mark Done</button>
                             )}
                         </div>
                         <p className="text-gray-900 font-bold">{log.description}</p>
