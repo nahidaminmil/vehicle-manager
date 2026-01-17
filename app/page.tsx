@@ -1,23 +1,29 @@
 "use client"
 import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase'
-import { Car, CheckCircle, XCircle, AlertTriangle, Plus, Search, BarChart3, Filter } from 'lucide-react'
+import { Car, CheckCircle, XCircle, AlertTriangle, Plus, Search, BarChart3 } from 'lucide-react'
 import Link from 'next/link'
 
 export default function Dashboard() {
   const [vehicles, setVehicles] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
+  const [errorMsg, setErrorMsg] = useState('') // New Error display
   const [filter, setFilter] = useState('')
 
   useEffect(() => {
     async function fetchVehicles() {
+      // FIX: Read from the View instead of the Table
       const { data, error } = await supabase
-        .from('vehicles')
-        .select(`*, vehicle_types (name)`)
+        .from('vehicle_dashboard_view')
+        .select('*')
         .order('created_at', { ascending: false })
       
-      if (error) console.error('Error:', error)
-      else setVehicles(data || [])
+      if (error) {
+        console.error('Error:', error)
+        setErrorMsg(error.message)
+      } else {
+        setVehicles(data || [])
+      }
       setLoading(false)
     }
     fetchVehicles()
@@ -27,16 +33,15 @@ export default function Dashboard() {
     const total = data.length
     const active = data.filter(v => v.status === 'Active').length
     const inactive = data.filter(v => v.status === 'Inactive').length
-    // Critical: Inactive vehicles that are Non-Mission Capable or have pending high priority logs
     const critical = data.filter(v => v.operational_category === 'Non-Mission Capable' || v.status === 'Inactive').length
     return { total, active, inactive, critical }
   }
 
   const stats = calculateStats(vehicles)
   const filteredVehicles = vehicles.filter(v => 
-    v.vehicle_uid.toLowerCase().includes(filter.toLowerCase()) ||
-    v.vehicle_types?.name.toLowerCase().includes(filter.toLowerCase()) ||
-    v.tob?.toLowerCase().includes(filter.toLowerCase())
+    (v.vehicle_uid || '').toLowerCase().includes(filter.toLowerCase()) ||
+    (v.vehicle_type_name || '').toLowerCase().includes(filter.toLowerCase()) ||
+    (v.tob || '').toLowerCase().includes(filter.toLowerCase())
   )
 
   if (loading) return <div className="p-8 text-xl font-bold text-gray-900">Loading Command Dashboard...</div>
@@ -51,16 +56,21 @@ export default function Dashboard() {
           <p className="text-gray-800 font-medium">Military Vehicle Accountability System</p>
         </div>
         <div className="flex gap-3 w-full md:w-auto">
-           {/* Analytics Button */}
            <Link href="/analytics" className="flex-1 md:flex-none flex items-center justify-center bg-purple-700 hover:bg-purple-800 text-white px-4 py-3 rounded-lg font-bold shadow-md transition-colors">
              <BarChart3 className="w-5 h-5 mr-2" /> Analytics
            </Link>
-           {/* Add Vehicle Button */}
            <Link href="/add-vehicle" className="flex-1 md:flex-none flex items-center justify-center bg-blue-700 hover:bg-blue-800 text-white px-4 py-3 rounded-lg font-bold shadow-md transition-colors">
              <Plus className="w-5 h-5 mr-2" /> Add Vehicle
            </Link>
         </div>
       </div>
+
+      {/* ERROR MESSAGE DISPLAY (If any) */}
+      {errorMsg && (
+        <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative mb-4 font-bold">
+          System Error: {errorMsg}
+        </div>
+      )}
 
       {/* STATS CARDS */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
@@ -84,7 +94,7 @@ export default function Dashboard() {
           />
         </div>
 
-        {/* TABLE WRAPPER FOR SCROLLING */}
+        {/* Table */}
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse">
             <thead className="bg-gray-100 text-gray-900 uppercase text-sm font-extrabold tracking-wider">
@@ -103,7 +113,8 @@ export default function Dashboard() {
                     {vehicle.vehicle_uid}
                   </td>
                   <td className="px-6 py-4 font-bold text-gray-800 whitespace-nowrap">
-                    {vehicle.vehicle_types?.name}
+                    {/* The View names it 'vehicle_type_name' now */}
+                    {vehicle.vehicle_type_name || '---'}
                   </td>
                   <td className="px-6 py-4 font-bold text-gray-800 whitespace-nowrap">
                     {vehicle.tob || '---'}
@@ -135,22 +146,8 @@ export default function Dashboard() {
           </table>
         </div>
       </div>
-    </div>
-  )
-}
-
-// Simple Stat Card Component
-function StatCard({ title, value, icon, color }: any) {
-  return (
-    <div className={`${color} rounded-lg shadow-lg p-5 text-white flex items-center justify-between`}>
-      <div>
-        <p className="text-sm font-medium opacity-90 uppercase">{title}</p>
-        <p className="text-3xl font-black mt-1">{value}</p>
-      </div>
-      <div className="p-3 bg-white/20 rounded-full">
-        {icon}
-      </div>
-      {/* FLOATING ACTION BUTTON (Mobile Friendly) */}
+      
+      {/* FLOATING ACTION BUTTON */}
       <Link href="/add-vehicle" className="fixed bottom-6 right-6 bg-blue-600 hover:bg-blue-700 text-white p-4 rounded-full shadow-2xl transition-transform hover:scale-110 flex items-center justify-center z-50">
         <Plus className="w-8 h-8" />
       </Link>
