@@ -8,15 +8,15 @@ export default function VehicleDetails() {
   const { id } = useParams()
   const router = useRouter()
   
-  // Data State
+  // --- DATA STATE ---
   const [vehicle, setVehicle] = useState<any>(null)
-  const [gallery, setGallery] = useState<any[]>([]) 
-  const [logs, setLogs] = useState<any[]>([])
-  const [evidence, setEvidence] = useState<any>({}) // Grouped photos by Log ID
-  const [types, setTypes] = useState<any[]>([])
+  const [gallery, setGallery] = useState<any[]>([]) // Main Vehicle Profile Photos
+  const [logs, setLogs] = useState<any[]>([])       // Maintenance Logs
+  const [evidence, setEvidence] = useState<any>({}) // Fault Photos (Grouped by log id)
+  const [types, setTypes] = useState<any[]>([])     // For dropdown
   const [loading, setLoading] = useState(true)
   
-  // Edit Profile State
+  // --- EDIT PROFILE STATE ---
   const [isEditing, setIsEditing] = useState(false)
   const [editFormData, setEditFormData] = useState({
     vehicle_uid: '',
@@ -26,7 +26,7 @@ export default function VehicleDetails() {
     operational_category: ''
   })
 
-  // Action State
+  // --- ACTION STATE (Logs & Status) ---
   const [uploading, setUploading] = useState(false)
   const [newStatus, setNewStatus] = useState('')
   const [inactiveDate, setInactiveDate] = useState('')
@@ -35,18 +35,19 @@ export default function VehicleDetails() {
   const [responsible, setResponsible] = useState('')
   const [priority, setPriority] = useState('Routine')
 
+  // --- LISTS ---
   const tobList = ['NDROMO', 'BAYOO', 'RHOO', 'DRODRO']
   const opCats = ['Fully Mission Capable', 'Degraded', 'Non-Mission Capable']
 
-  // 1. Fetch Data
+  // --- 1. FETCH ALL DATA ---
   async function fetchData() {
-    // A. Vehicle
+    // A. Vehicle Details (From the VIEW so we get the type name)
     const { data: vehicleData } = await supabase.from('vehicle_dashboard_view').select('*').eq('id', id).single()
-    // B. Types
+    // B. Vehicle Types (For editing dropdown)
     const { data: typesData } = await supabase.from('vehicle_types').select('*')
-    // C. Vehicle Gallery
+    // C. Main Profile Gallery
     const { data: galleryData } = await supabase.from('vehicle_gallery').select('*').eq('vehicle_id', id).order('created_at', { ascending: false })
-    // D. Logs
+    // D. Maintenance Logs
     const { data: logData } = await supabase.from('maintenance_logs').select('*').eq('vehicle_id', id).order('created_at', { ascending: false })
 
     if (vehicleData) {
@@ -56,12 +57,12 @@ export default function VehicleDetails() {
       setGallery(galleryData || [])
       setLogs(logData || [])
       
-      // E. Log Evidence (Fetch all photos for these logs)
+      // E. Fetch Evidence Photos for these logs
       if (logData && logData.length > 0) {
           const logIds = logData.map(l => l.id)
           const { data: evidenceData } = await supabase.from('log_evidence').select('*').in('log_id', logIds)
           
-          // Group photos by log_id for easy display
+          // Group photos by log_id for easy display later
           const grouped: any = {}
           evidenceData?.forEach((photo: any) => {
               if (!grouped[photo.log_id]) grouped[photo.log_id] = []
@@ -70,14 +71,16 @@ export default function VehicleDetails() {
           setEvidence(grouped)
       }
 
+      // Initialize Edit Form Data
       setEditFormData({
         vehicle_uid: vehicleData.vehicle_uid || '',
         tob: vehicleData.tob || 'NDROMO',
-        vehicle_type_id: vehicleData.vehicle_type_id || '',
+        vehicle_type_id: vehicleData.vehicle_type_id || '', 
         mileage: vehicleData.mileage || 0,
         operational_category: vehicleData.operational_category || 'Fully Mission Capable'
       })
 
+      // Initialize Date Picker
       if (vehicleData.inactive_since) {
         setInactiveDate(new Date(vehicleData.inactive_since).toISOString().split('T')[0])
       } else {
@@ -89,6 +92,7 @@ export default function VehicleDetails() {
 
   useEffect(() => { if (id) fetchData() }, [id])
 
+  // --- HELPER: Image Resizer ---
   const resizeImage = (file: File): Promise<Blob> => {
     return new Promise((resolve) => {
       const img = document.createElement('img')
@@ -108,30 +112,38 @@ export default function VehicleDetails() {
     })
   }
 
-  // 2. Upload MAIN Vehicle Photo
+  // --- 2. UPLOAD: Main Profile Photo ---
   async function handleMainUpload(event: any) {
-    if (gallery.length >= 10) return alert('Max 10 vehicle photos allowed.')
+    if (gallery.length >= 10) return alert('Max 10 profile photos allowed.')
     try {
       const file = event.target.files[0]; if (!file) return; setUploading(true)
       const blob = await resizeImage(file)
       const fileName = `veh_${vehicle.id}_${Date.now()}.jpg`
-      const { data } = await supabase.storage.from('vehicle-media').upload(fileName, blob, { contentType: 'image/jpeg', upsert: true })
+      // Upload to Bucket
+      await supabase.storage.from('vehicle-media').upload(fileName, blob, { contentType: 'image/jpeg', upsert: true })
       const { data: { publicUrl } } = supabase.storage.from('vehicle-media').getPublicUrl(fileName)
+      // Add to Gallery Table
       await supabase.from('vehicle_gallery').insert({ vehicle_id: vehicle.id, image_url: publicUrl })
+      // Update main thumbnail icon
       await supabase.from('vehicles').update({ vehicle_image_url: publicUrl }).eq('id', vehicle.id)
-      alert('Photo Added!'); fetchData()
+      alert('Profile Photo Added!'); fetchData()
     } catch (e: any) { alert(e.message) } finally { setUploading(false) }
   }
 
-  // 3. Upload FAULT EVIDENCE (Log Photo)
+  // --- 3. UPLOAD: Fault Evidence Photo ---
   async function handleLogUpload(event: any, logId: string) {
     try {
       const file = event.target.files[0]; if (!file) return; setUploading(true)
+      // Force user to select the log first if they haven't
+      if(!logId) { alert("Please submit the log text first, then add photos to it in the history list below."); return;}
+
       const blob = await resizeImage(file)
       const fileName = `log_${logId}_${Date.now()}.jpg`
+      // Upload to Bucket
       await supabase.storage.from('vehicle-media').upload(fileName, blob, { contentType: 'image/jpeg', upsert: true })
       const { data: { publicUrl } } = supabase.storage.from('vehicle-media').getPublicUrl(fileName)
       
+      // Insert into Evidence Table
       const { error } = await supabase.from('log_evidence').insert({ log_id: logId, image_url: publicUrl })
       if (error) throw error
       
@@ -139,138 +151,255 @@ export default function VehicleDetails() {
     } catch (e: any) { alert(e.message) } finally { setUploading(false) }
   }
 
-  // Deletes
-  async function deleteGalleryPhoto(pid: string) { if(confirm('Delete photo?')) { await supabase.from('vehicle_gallery').delete().eq('id', pid); fetchData() }}
-  async function deleteEvidencePhoto(eid: string) { if(confirm('Delete evidence?')) { await supabase.from('log_evidence').delete().eq('id', eid); fetchData() }}
+  // --- DELETE Functions ---
+  async function deleteGalleryPhoto(pid: string) { if(confirm('Delete profile photo?')) { await supabase.from('vehicle_gallery').delete().eq('id', pid); fetchData() }}
+  async function deleteEvidencePhoto(eid: string) { if(confirm('Delete evidence photo?')) { await supabase.from('log_evidence').delete().eq('id', eid); fetchData() }}
 
-  // Profile Save
+  // --- SAVE Profile Edits ---
   async function saveProfile() {
-    await supabase.from('vehicles').update({ ...editFormData }).eq('id', vehicle.id)
-    setIsEditing(false); fetchData()
+    const { error } = await supabase.from('vehicles').update({
+        vehicle_uid: editFormData.vehicle_uid,
+        tob: editFormData.tob,
+        vehicle_type_id: editFormData.vehicle_type_id,
+        mileage: editFormData.mileage,
+        operational_category: editFormData.operational_category
+      }).eq('id', vehicle.id)
+
+    if(error) alert("Error saving: " + error.message)
+    else { setIsEditing(false); fetchData() }
   }
 
-  // Status Update
+  // --- UPDATE Status ---
   async function handleUpdateStatus() {
     const d = newStatus === 'Inactive' ? (new Date(inactiveDate).toISOString()) : null
     await supabase.from('vehicles').update({ status: newStatus, inactive_since: d }).eq('id', vehicle.id)
     alert('Status Updated!'); router.refresh(); window.location.reload()
   }
 
-  // Add Log
+  // --- ADD New Log ---
   async function handleAddLog() {
-    if (!remark) return alert('Write a description')
-    await supabase.from('maintenance_logs').insert({ vehicle_id: vehicle.id, description: remark, priority, action_required: actionReq, responsible_person: responsible, status: 'Pending' })
-    alert('Log Added - Now you can add photos to it below.'); setRemark(''); setActionReq(''); setResponsible(''); fetchData()
+    if (!remark) return alert('Please write a fault description first.')
+    // Create the log entry
+    const { error } = await supabase.from('maintenance_logs').insert({ vehicle_id: vehicle.id, description: remark, priority, action_required: actionReq, responsible_person: responsible, status: 'Pending' })
+    if(error) alert("Error adding log")
+    else { 
+        alert('Log Text Added. Scroll down to "Maintenance History" to add photos to this log.'); 
+        setRemark(''); setActionReq(''); setResponsible(''); fetchData() 
+    }
   }
 
+  // --- RESOLVE Log ---
   async function resolveLog(logId: string) {
     await supabase.from('maintenance_logs').update({ status: 'Resolved' }).eq('id', logId); fetchData()
   }
 
-  if (loading) return <div className="p-8">Loading...</div>
-  if (!vehicle) return <div className="p-8">Vehicle not found</div>
+  if (loading) return <div className="p-8 font-bold text-xl">Loading Vehicle Data...</div>
+  if (!vehicle) return <div className="p-8 font-bold text-xl text-red-600">Vehicle not found (ID: {id})</div>
 
   return (
-    <div className="min-h-screen bg-gray-50 p-4 pb-20">
-      <button onClick={() => router.push('/')} className="flex items-center text-gray-600 mb-4">
-        <ArrowLeft className="w-5 h-5 mr-2" /> Back
+    <div className="min-h-screen bg-gray-100 p-4 pb-20">
+      <button onClick={() => router.push('/')} className="flex items-center text-gray-700 font-bold mb-4 bg-white p-2 rounded shadow-sm w-fit">
+        <ArrowLeft className="w-5 h-5 mr-2" /> Back to Dashboard
       </button>
 
-      {/* 1. MAIN GALLERY */}
-      <div className="bg-white rounded-lg shadow-lg overflow-hidden mb-6 p-4">
+      {/* ================= SECTION 1: MAIN PROFILE GALLERY ================= */}
+      <div className="bg-white rounded-lg shadow-md overflow-hidden mb-6 p-4 border-t-4 border-blue-600">
         <div className="flex justify-between items-center mb-4">
-            <h2 className="font-bold text-gray-800">Vehicle Profile Photos ({gallery.length}/10)</h2>
-            <label className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg cursor-pointer flex items-center text-sm font-bold">
-                <Camera className="w-4 h-4 mr-2" /> Add Profile Photo
-                <input type="file" accept="image/*" className="hidden" onChange={handleMainUpload} disabled={uploading} />
+            <h2 className="text-lg font-black text-gray-800 flex items-center"><Camera className="w-5 h-5 mr-2"/> Vehicle Profile Photos ({gallery.length}/10)</h2>
+            <label className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-2 rounded-md cursor-pointer flex items-center text-sm font-bold shadow-sm transition-colors">
+                <Plus className="w-4 h-4 mr-1" /> Add Profile Photo
+                <input type="file" accept="image/*" className="hidden" onChange={handleMainUpload} disabled={uploading || gallery.length >= 10} />
             </label>
         </div>
+        
+        {/* Photo Grid */}
         <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+            {gallery.length === 0 && (
+                <div className="col-span-full h-32 bg-gray-50 rounded-lg border-2 border-dashed border-gray-300 flex items-center justify-center text-gray-400 font-bold">
+                    No profile photos added yet.
+                </div>
+            )}
             {gallery.map((p) => (
-                <div key={p.id} className="relative aspect-square group">
-                    <img src={p.image_url} className="w-full h-full object-cover rounded border" />
-                    <button onClick={() => deleteGalleryPhoto(p.id)} className="absolute top-1 right-1 bg-red-600 text-white p-1 rounded-full opacity-80 hover:opacity-100"><Trash2 className="w-3 h-3" /></button>
+                <div key={p.id} className="relative aspect-square group rounded-lg overflow-hidden shadow-sm border border-gray-200">
+                    <img src={p.image_url} className="w-full h-full object-cover" alt="Profile" />
+                    <button onClick={() => deleteGalleryPhoto(p.id)} className="absolute top-1 right-1 bg-red-600/80 hover:bg-red-600 text-white p-1.5 rounded-full opacity-0 group-hover:opacity-100 transition-opacity"><Trash2 className="w-3 h-3" /></button>
                 </div>
             ))}
-            {gallery.length === 0 && <div className="col-span-full text-center py-8 text-gray-400">No profile photos yet.</div>}
         </div>
       </div>
 
-      {/* 2. IDENTITY CARD */}
+
+      {/* ================= SECTION 2: VEHICLE IDENTITY & STATS (RESTORED!) ================= */}
       <div className="bg-white rounded-lg shadow-md p-6 mb-6">
-        <div className="flex justify-between items-center mb-4 border-b pb-2">
-            <h2 className="text-xl font-bold text-gray-800">Vehicle Identity</h2>
-            {!isEditing ? <button onClick={() => setIsEditing(true)}><Edit2 className="w-5 h-5 text-blue-600"/></button> : <div className="flex gap-4"><X onClick={() => setIsEditing(false)} className="cursor-pointer"/><Save onClick={saveProfile} className="text-green-600 cursor-pointer"/></div>}
+        <div className="flex justify-between items-center mb-4 border-b border-gray-100 pb-3">
+            <h2 className="text-xl font-black text-gray-900">Vehicle Identity & Stats</h2>
+            {!isEditing ? (
+                <button onClick={() => setIsEditing(true)} className="text-blue-700 flex items-center text-sm font-bold bg-blue-50 px-3 py-1 rounded hover:bg-blue-100">
+                    <Edit2 className="w-4 h-4 mr-1" /> Edit Profile
+                </button>
+            ) : (
+                <div className="flex gap-2">
+                    <button onClick={() => setIsEditing(false)} className="text-gray-600 bg-gray-100 px-3 py-1 rounded font-bold flex items-center"><X className="w-4 h-4 mr-1" /> Cancel</button>
+                    <button onClick={saveProfile} className="text-white bg-green-600 px-3 py-1 rounded font-bold flex items-center hover:bg-green-700"><Save className="w-4 h-4 mr-1" /> Save Changes</button>
+                </div>
+            )}
         </div>
-        {/* Simplified View/Edit for brevity - reusing logic from previous step */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-             <div><label className="text-xs font-bold text-gray-500">ID</label>{isEditing ? <input value={editFormData.vehicle_uid} onChange={e=>setEditFormData({...editFormData, vehicle_uid: e.target.value})} className="border p-2 w-full rounded"/> : <p className="font-bold">{vehicle.vehicle_uid}</p>}</div>
-             <div><label className="text-xs font-bold text-gray-500">TOB</label>{isEditing ? <select value={editFormData.tob} onChange={e=>setEditFormData({...editFormData, tob: e.target.value})} className="border p-2 w-full rounded">{tobList.map(t=><option key={t}>{t}</option>)}</select> : <p className="font-bold">{vehicle.tob}</p>}</div>
-             <div><label className="text-xs font-bold text-gray-500">Mileage</label>{isEditing ? <input type="number" value={editFormData.mileage} onChange={e=>setEditFormData({...editFormData, mileage: Number(e.target.value)})} className="border p-2 w-full rounded"/> : <p className="font-bold">{vehicle.mileage} km</p>}</div>
-             <div><label className="text-xs font-bold text-gray-500">Type</label><p className="font-bold">{vehicle.vehicle_type_name}</p></div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {/* Field 1: ID */}
+            <div>
+                <label className="block text-xs font-extrabold text-gray-500 uppercase tracking-wider mb-1">Vehicle ID</label>
+                {isEditing ? <input type="text" value={editFormData.vehicle_uid} onChange={(e) => setEditFormData({...editFormData, vehicle_uid: e.target.value})} className="w-full p-2 border-2 border-blue-200 rounded font-bold text-gray-900 focus:border-blue-500 outline-none"/> 
+                : <p className="text-lg font-black text-gray-900">{vehicle.vehicle_uid || '---'}</p>}
+            </div>
+
+            {/* Field 2: Location */}
+            <div>
+                <label className="block text-xs font-extrabold text-gray-500 uppercase tracking-wider mb-1">Location (TOB)</label>
+                {isEditing ? <select value={editFormData.tob} onChange={(e) => setEditFormData({...editFormData, tob: e.target.value})} className="w-full p-2 border-2 border-blue-200 rounded font-bold text-gray-900">{tobList.map(t => <option key={t} value={t}>{t}</option>)}</select> 
+                : <p className="text-lg font-bold text-gray-900">{vehicle.tob || '---'}</p>}
+            </div>
+
+             {/* Field 3: Type */}
+             <div>
+                <label className="block text-xs font-extrabold text-gray-500 uppercase tracking-wider mb-1">Vehicle Type</label>
+                {isEditing ? <select value={editFormData.vehicle_type_id} onChange={(e) => setEditFormData({...editFormData, vehicle_type_id: e.target.value})} className="w-full p-2 border-2 border-blue-200 rounded font-bold text-gray-900">{types.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}</select> 
+                : <p className="text-lg font-bold text-gray-900">{vehicle.vehicle_type_name || '---'}</p>}
+            </div>
+
+            {/* Field 4: Mileage */}
+            <div>
+                <label className="block text-xs font-extrabold text-gray-500 uppercase tracking-wider mb-1">Mileage (KM)</label>
+                {isEditing ? <input type="number" value={editFormData.mileage} onChange={(e) => setEditFormData({...editFormData, mileage: Number(e.target.value)})} className="w-full p-2 border-2 border-blue-200 rounded font-bold text-gray-900 focus:border-blue-500 outline-none"/> 
+                : <p className="text-lg font-bold text-gray-900">{vehicle.mileage ? `${vehicle.mileage.toLocaleString()}` : '0'} km</p>}
+            </div>
+
+            {/* Field 5: Op Category (RESTORED) */}
+            <div className="md:col-span-2">
+                <label className="block text-xs font-extrabold text-gray-500 uppercase tracking-wider mb-1">Operational Category</label>
+                {isEditing ? (
+                    <select value={editFormData.operational_category} onChange={(e) => setEditFormData({...editFormData, operational_category: e.target.value})} className="w-full p-2 border-2 border-blue-200 rounded font-bold text-gray-900">
+                        {opCats.map(c => <option key={c} value={c}>{c}</option>)}
+                    </select>
+                ) : (
+                    <span className={`px-3 py-1 text-sm font-black rounded-full inline-block ${vehicle.operational_category === 'Fully Mission Capable' ? 'bg-green-100 text-green-800 border border-green-200' : 'bg-red-100 text-red-800 border border-red-200'}`}>
+                        {vehicle.operational_category || 'Fully Mission Capable'}
+                    </span>
+                )}
+            </div>
         </div>
       </div>
 
-      {/* 3. REPORT ISSUE */}
-      <div className="bg-white p-6 rounded-lg shadow-md mb-6 border-l-4 border-orange-500">
-          <h2 className="text-xl font-bold mb-4 flex items-center text-orange-700"><AlertTriangle className="w-6 h-6 mr-2" /> Report New Issue</h2>
-          <textarea value={remark} onChange={(e) => setRemark(e.target.value)} className="w-full p-3 border border-gray-300 rounded-md h-20 mb-3" placeholder="Describe the fault here..." />
-          <div className="flex gap-2 mb-3">
-             <input value={actionReq} onChange={e=>setActionReq(e.target.value)} placeholder="Required Action" className="w-1/2 p-2 border rounded"/>
-             <input value={responsible} onChange={e=>setResponsible(e.target.value)} placeholder="Responsible Person" className="w-1/2 p-2 border rounded"/>
+
+      {/* ================= SECTION 3: STATUS MANAGER ================= */}
+      <div className="bg-white p-6 rounded-lg shadow-md mb-6 border-t-4 border-gray-800">
+          <h2 className="text-xl font-black mb-4 flex items-center text-gray-900"><CheckCircle className="w-6 h-6 mr-2 text-green-600" /> Update Status</h2>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4 bg-gray-50 p-4 rounded-lg border border-gray-200">
+             <div>
+                <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Current Status</label>
+                <select value={newStatus} onChange={(e) => setNewStatus(e.target.value)} className="block w-full p-3 border-2 border-gray-300 rounded-md font-bold text-gray-900 text-lg focus:border-blue-500">
+                    <option value="Active">🟢 Active (Ready)</option>
+                    <option value="Inactive">🔴 Inactive (Off Road)</option>
+                    <option value="Maintenance">🟠 Maintenance</option>
+                </select>
+             </div>
+             {newStatus === 'Inactive' && (
+                 <div>
+                    <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Inactive Since Date:</label>
+                    <input type="date" value={inactiveDate} onChange={(e) => setInactiveDate(e.target.value)} className="w-full p-3 border-2 border-gray-300 rounded-md font-bold text-gray-900" />
+                 </div>
+             )}
           </div>
-          <div className="flex gap-4">
-             <select value={priority} onChange={e=>setPriority(e.target.value)} className="p-3 border rounded font-bold"><option>Routine</option><option>Critical</option></select>
-             <button onClick={handleAddLog} className="flex-1 bg-gray-900 text-white rounded font-bold hover:bg-black">Submit Log</button>
-          </div>
+          <button onClick={handleUpdateStatus} className="w-full py-4 bg-gray-900 text-white rounded-lg font-black text-lg hover:bg-black transition-colors shadow-md">Save Status Change</button>
       </div>
 
-      {/* 4. MAINTENANCE HISTORY + EVIDENCE */}
-      <div className="bg-white rounded-lg shadow-md overflow-hidden">
-        <div className="p-4 bg-gray-100 border-b border-gray-200"><h3 className="font-bold text-gray-800 flex items-center"><Wrench className="mr-2"/> Maintenance History</h3></div>
-        <div className="divide-y divide-gray-100">
-            {logs.length === 0 && <div className="p-6 text-center text-gray-400">No records found.</div>}
+
+      {/* ================= SECTION 4: REPORT NEW ISSUE ================= */}
+      <div className="bg-white p-6 rounded-lg shadow-md mb-8 border-t-4 border-orange-500">
+          <h2 className="text-xl font-black mb-4 flex items-center text-orange-700"><AlertTriangle className="w-6 h-6 mr-2" /> Report New Issue</h2>
+          <p className="text-sm text-gray-600 mb-2 font-bold">1. Describe the fault in text first:</p>
+          <textarea value={remark} onChange={(e) => setRemark(e.target.value)} className="w-full p-3 border-2 border-gray-300 rounded-md h-24 mb-3 font-bold text-gray-900 focus:border-orange-500 placeholder-gray-400" placeholder="E.g., Flat tire on front left, engine overheating..." />
+          
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3">
+             <input type="text" value={actionReq} onChange={(e) => setActionReq(e.target.value)} className="p-3 border-2 border-gray-300 rounded-md font-bold" placeholder="Required Action (Optional)" />
+             <input type="text" value={responsible} onChange={(e) => setResponsible(e.target.value)} className="p-3 border-2 border-gray-300 rounded-md font-bold" placeholder="Person Responsible (Optional)" />
+          </div>
+
+          <div className="flex gap-4 items-center">
+            <select value={priority} onChange={(e) => setPriority(e.target.value)} className="p-3 border-2 border-gray-300 rounded-md font-bold text-gray-900 bg-white">
+                <option value="Routine">Routine Priority</option>
+                <option value="Critical">🔥 Critical Priority</option>
+            </select>
+            <button onClick={handleAddLog} className="flex-1 bg-orange-600 text-white py-3 rounded-lg font-black hover:bg-orange-700 shadow-md transition-colors">
+                Submit Log Text
+            </button>
+          </div>
+          <p className="text-xs text-gray-500 mt-2 italic text-center">(*You can add photos to this log after submitting the text below)</p>
+      </div>
+
+
+      {/* ================= SECTION 5: MAINTENANCE HISTORY & EVIDENCE PHOTOS ================= */}
+      <div className="bg-white rounded-lg shadow-lg overflow-hidden border border-gray-200">
+        <div className="p-4 bg-gray-800 border-b border-gray-900 flex items-center">
+            <Wrench className="w-5 h-5 mr-2 text-white" />
+            <h3 className="text-lg font-black text-white uppercase tracking-wider">Maintenance History & Evidence</h3>
+        </div>
+        <div className="divide-y divide-gray-200 bg-gray-50">
+            {logs.length === 0 && <div className="p-8 text-center text-gray-500 font-bold text-lg">No maintenance records found.</div>}
+            
             {logs.map((log) => (
-                <div key={log.id} className="p-4 hover:bg-gray-50 transition-colors">
-                    {/* Log Header */}
-                    <div className="flex justify-between items-start mb-2">
-                        <div className="flex items-center gap-2">
-                            <span className={`px-2 py-0.5 text-xs font-bold rounded-full ${log.priority==='Critical'?'bg-red-100 text-red-800':'bg-blue-100 text-blue-800'}`}>{log.priority}</span>
-                            <span className="text-xs text-gray-400 font-bold">{new Date(log.created_at).toLocaleDateString()}</span>
+                <div key={log.id} className="p-5 hover:bg-white transition-colors border-l-4 border-transparent hover:border-blue-500">
+                    
+                    {/* Log Header Row */}
+                    <div className="flex flex-col md:flex-row justify-between items-start mb-3">
+                        <div className="flex items-center gap-3 mb-2 md:mb-0">
+                            <span className={`px-3 py-1 text-xs font-black uppercase tracking-wider rounded-full ${log.priority==='Critical'?'bg-red-600 text-white':'bg-blue-100 text-blue-800'}`}>{log.priority}</span>
+                            <span className="text-sm text-gray-500 font-bold flex items-center"><Clock className="w-4 h-4 mr-1"/>{new Date(log.created_at).toLocaleDateString()}</span>
                         </div>
                         {log.status !== 'Resolved' ? 
-                            <button onClick={() => resolveLog(log.id)} className="text-xs bg-green-600 text-white px-2 py-1 rounded hover:bg-green-700">Mark Done</button> 
-                            : <span className="text-xs font-bold text-green-600 flex items-center"><CheckCircle className="w-3 h-3 mr-1"/> Resolved</span>
+                            <button onClick={() => resolveLog(log.id)} className="flex items-center text-xs bg-green-600 text-white px-3 py-1.5 rounded font-bold hover:bg-green-700 shadow-sm"><CheckSquare className="w-4 h-4 mr-1"/> Mark as Resolved</button> 
+                            : <span className="px-3 py-1.5 text-xs font-black uppercase tracking-wider text-green-800 bg-green-100 rounded-full flex items-center"><CheckCircle className="w-4 h-4 mr-1"/> Resolved</span>
                         }
                     </div>
                     
-                    {/* Description */}
-                    <p className="font-bold text-gray-900 mb-2">{log.description}</p>
-                    {(log.action_required || log.responsible_person) && <div className="text-sm text-gray-600 mb-3 bg-white border p-2 rounded">
-                        {log.action_required && <div><strong>Action:</strong> {log.action_required}</div>}
-                        {log.responsible_person && <div><strong>Resp:</strong> {log.responsible_person}</div>}
-                    </div>}
+                    {/* Log Description */}
+                    <p className="text-lg font-black text-gray-900 mb-3">{log.description}</p>
+                    
+                    {/* Action/Resp Details */}
+                    {(log.action_required || log.responsible_person) && (
+                        <div className="text-sm text-gray-700 mb-4 bg-white border-2 border-gray-200 p-3 rounded-lg grid grid-cols-1 md:grid-cols-2 gap-2">
+                            {log.action_required && <div className="flex"><span className="font-bold uppercase text-gray-500 w-20">Action:</span> <span className="font-bold">{log.action_required}</span></div>}
+                            {log.responsible_person && <div className="flex"><span className="font-bold uppercase text-gray-500 w-20">Resp:</span> <span className="font-bold">{log.responsible_person}</span></div>}
+                        </div>
+                    )}
 
-                    {/* EVIDENCE SECTION */}
-                    <div className="mt-3 p-3 bg-gray-100 rounded-lg">
-                        <div className="flex justify-between items-center mb-2">
-                            <span className="text-xs font-bold text-gray-500 uppercase flex items-center"><ImageIcon className="w-3 h-3 mr-1"/> Evidence Photos</span>
-                            <label className="cursor-pointer text-xs font-bold text-blue-600 hover:text-blue-800 flex items-center bg-white px-2 py-1 rounded shadow-sm border">
-                                <Plus className="w-3 h-3 mr-1"/> Add Photo
+                    {/* ----- EVIDENCE SECTION (Photos for this specific log) ----- */}
+                    <div className="mt-4 p-4 bg-gray-200/50 rounded-xl border-2 border-gray-300/50">
+                        <div className="flex justify-between items-center mb-3">
+                            <h4 className="text-sm font-black text-gray-700 uppercase flex items-center"><ImageIcon className="w-4 h-4 mr-2"/> Evidence Photos</h4>
+                            
+                            {/* THE ADD FAULT PHOTO BUTTON */}
+                            <label className="cursor-pointer text-xs font-bold text-blue-700 hover:text-white hover:bg-blue-600 flex items-center bg-white px-3 py-1.5 rounded-md shadow-sm border-2 border-blue-200 transition-all">
+                                <Plus className="w-4 h-4 mr-1"/> Add Photo to this Log
                                 <input type="file" accept="image/*" className="hidden" onChange={(e) => handleLogUpload(e, log.id)} disabled={uploading} />
                             </label>
                         </div>
                         
-                        <div className="flex flex-wrap gap-2">
-                            {evidence[log.id]?.map((pic: any) => (
-                                <div key={pic.id} className="relative w-20 h-20 group">
-                                    <img src={pic.image_url} className="w-full h-full object-cover rounded border border-gray-300 shadow-sm cursor-pointer hover:scale-105 transition-transform" onClick={()=>window.open(pic.image_url, '_blank')} />
-                                    <button onClick={() => deleteEvidencePhoto(pic.id)} className="absolute -top-1 -right-1 bg-red-600 text-white rounded-full p-0.5 shadow-md opacity-0 group-hover:opacity-100 transition-opacity"><X className="w-3 h-3"/></button>
-                                </div>
-                            ))}
-                            {(!evidence[log.id] || evidence[log.id].length === 0) && <div className="text-xs text-gray-400 italic py-2">No photos attached.</div>}
+                        {/* Photo Thumbnail Grid */}
+                        <div className="flex flex-wrap gap-3">
+                            {(!evidence[log.id] || evidence[log.id].length === 0) ? (
+                                <div className="text-sm text-gray-500 font-bold italic py-2 w-full text-center bg-white rounded border-2 border-dashed border-gray-300">No photos attached to this report.</div>
+                            ) : (
+                                evidence[log.id].map((pic: any) => (
+                                    <div key={pic.id} className="relative w-24 h-24 group rounded-lg overflow-hidden shadow-sm border-2 border-white">
+                                        <img src={pic.image_url} className="w-full h-full object-cover cursor-pointer hover:scale-110 transition-transform" onClick={()=>window.open(pic.image_url, '_blank')} alt="Evidence" />
+                                        <button onClick={() => deleteEvidencePhoto(pic.id)} className="absolute top-1 right-1 bg-red-600 text-white rounded-full p-1 shadow-md opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-700"><X className="w-3 h-3"/></button>
+                                    </div>
+                                ))
+                            )}
                         </div>
                     </div>
+                    {/* --------------------------------------------------------- */}
 
                 </div>
             ))}
