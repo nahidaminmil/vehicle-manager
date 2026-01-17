@@ -68,12 +68,12 @@ export default function UserManagementPage() {
     setVehicles(data || [])
   }
 
-  // 2. CREATE USER
+ // 2. CREATE USER (Updated Robust Version)
   async function handleCreateUser() {
     if (!newEmail || !newPassword) return alert('Email and Password required')
     setCreating(true)
 
-    // Note: Creating a user client-side usually logs you in as them immediately.
+    // A. Create the Auth User (This creates the login credentials)
     const { data: authData, error: authError } = await supabase.auth.signUp({
       email: newEmail,
       password: newPassword
@@ -86,20 +86,27 @@ export default function UserManagementPage() {
     }
 
     if (authData.user) {
-        // Update the Profile that was auto-created by the database trigger
-        const updates: any = { role: newRole }
-        if (newRole === 'tob_admin') updates.assigned_tob = newTob
-        if (newRole === 'vehicle_user') updates.assigned_vehicle_id = newVehicleId
+        // B. Manually Save the Profile Data
+        // We use .upsert() here. This guarantees the row is created even if the 
+        // database trigger failed or was too slow.
+        const profileData = {
+            id: authData.user.id,  // IMPORTANT: Link to the new Auth ID
+            email: newEmail,
+            role: newRole,
+            assigned_tob: newRole === 'tob_admin' ? newTob : null,
+            assigned_vehicle_id: newRole === 'vehicle_user' ? newVehicleId : null
+        }
 
         const { error: profileError } = await supabase
             .from('profiles')
-            .update(updates)
-            .eq('id', authData.user.id)
+            .upsert(profileData)
         
-        if (profileError) alert('Error updating profile details: ' + profileError.message)
-        else {
-            alert('User Created Successfully! (NOTE: You may have been switched to this new account. Please re-login as Admin if needed.)')
-            fetchUsers()
+        if (profileError) {
+            console.error('Profile Error:', profileError)
+            alert('User Auth created, but Profile failed: ' + profileError.message)
+        } else {
+            alert('User Created Successfully!')
+            fetchUsers() // Refresh the list immediately
             setNewEmail('')
             setNewPassword('')
         }
