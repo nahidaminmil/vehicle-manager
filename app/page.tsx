@@ -56,6 +56,11 @@ export default function Dashboard() {
           <p className="text-gray-800 font-medium">Military Vehicle Accountability System</p>
         </div>
         <div className="flex gap-3 w-full md:w-auto">
+           {/* NEW BUTTON ADDED HERE */}
+           <Link href="/all-vehicles" className="flex-1 md:flex-none flex items-center justify-center bg-gray-800 hover:bg-black text-white px-4 py-3 rounded-lg font-bold shadow-md transition-colors">
+             <Car className="w-5 h-5 mr-2" /> All Vehicles
+           </Link>
+
            <Link href="/analytics" className="flex-1 md:flex-none flex items-center justify-center bg-purple-700 hover:bg-purple-800 text-white px-4 py-3 rounded-lg font-bold shadow-md transition-colors">
              <BarChart3 className="w-5 h-5 mr-2" /> Analytics
            </Link>
@@ -154,9 +159,6 @@ export default function Dashboard() {
   )
 }
 
-// --------------------------------------------------------
-// THE MISSING PART: This is what caused your error!
-// --------------------------------------------------------
 function StatCard({ title, value, icon, color }: any) {
   return (
     <div className={`${color} rounded-lg shadow-lg p-5 text-white flex items-center justify-between`}>
