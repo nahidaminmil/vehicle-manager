@@ -5,7 +5,7 @@ import { supabase } from '@/lib/supabase'
 import { 
   ArrowLeft, CheckCircle, AlertTriangle, Camera, Wrench, 
   CheckSquare, Clock, Edit2, X, Save, Trash2, Plus, 
-  ImageIcon, User, AlertOctagon, Minus, ArrowDown, Calendar, FileText, ClipboardList
+  ImageIcon, User, AlertOctagon, Minus, ArrowDown, Calendar
 } from 'lucide-react'
 
 export default function VehicleDetails() {
@@ -23,7 +23,7 @@ export default function VehicleDetails() {
   // --- EDIT PROFILE STATE ---
   const [isEditing, setIsEditing] = useState(false)
   const [editFormData, setEditFormData] = useState({
-    vehicle_uid: '', tob: '', vehicle_type_id: '', mileage: 0, operational_category: ''
+    vehicle_uid: '', tob: '', vehicle_type_id: '', mileage: 0, operational_category: '', status: ''
   })
 
   // --- LOG FORM STATE ---
@@ -47,6 +47,7 @@ export default function VehicleDetails() {
   // --- LISTS ---
   const tobList = ['NDROMO', 'BAYOO', 'RHOO', 'DRODRO']
   const opCats = ['Fully Mission Capable', 'Degraded', 'Non-Mission Capable']
+  const vehicleStatuses = ['Active', 'Inactive', 'Maintenance']
   
   // --- FETCH DATA ---
   async function fetchData() {
@@ -78,7 +79,8 @@ export default function VehicleDetails() {
         tob: vehicleData.tob || 'NDROMO',
         vehicle_type_id: vehicleData.vehicle_type_id || '', 
         mileage: vehicleData.mileage || 0,
-        operational_category: vehicleData.operational_category || 'Fully Mission Capable'
+        operational_category: vehicleData.operational_category || 'Fully Mission Capable',
+        status: vehicleData.status || 'Active'
       })
 
       if (vehicleData.inactive_since) {
@@ -148,7 +150,8 @@ export default function VehicleDetails() {
         tob: editFormData.tob,
         vehicle_type_id: editFormData.vehicle_type_id,
         mileage: editFormData.mileage,
-        operational_category: editFormData.operational_category
+        operational_category: editFormData.operational_category,
+        status: editFormData.status
       }).eq('id', vehicle.id)
     if(error) alert("Error saving: " + error.message)
     else { setIsEditing(false); fetchData() }
@@ -163,7 +166,6 @@ export default function VehicleDetails() {
   // --- SUBMIT FULL LOG ---
   async function handleSubmitLog() {
     if (!remark) return alert('Please write a fault description.')
-    
     setUploading(true)
     try {
         const { data: newLog, error } = await supabase.from('maintenance_logs').insert({ 
@@ -171,14 +173,12 @@ export default function VehicleDetails() {
             description: remark, 
             priority, 
             status: maintStatus,
-            
-            // Officer Fields
             action_required: actionReq, 
             responsible_person: responsible, 
             estimated_repair_days: estDays ? parseInt(estDays) : 0,
             remarks: officerRemarks,
             notes: genNotes,
-            logged_date: new Date().toISOString() // Information Updated On
+            logged_date: new Date().toISOString()
         }).select().single()
 
         if(error) throw error
@@ -193,12 +193,9 @@ export default function VehicleDetails() {
         }
 
         alert('Issue Reported Successfully!')
-        // Reset Form
         setRemark(''); setActionReq(''); setResponsible(''); setLogFile(null); 
         setPriority('Routine'); setEstDays(''); setOfficerRemarks(''); setGenNotes(''); setMaintStatus('Pending');
-        
         await fetchData() 
-
     } catch (err: any) {
         alert("Error submitting: " + err.message)
     } finally {
@@ -211,6 +208,12 @@ export default function VehicleDetails() {
       if (p === 'Critical') return <span className="flex items-center bg-red-600 text-white px-3 py-1 rounded-full text-xs font-black uppercase"><AlertOctagon className="w-4 h-4 mr-1"/> Critical</span>
       if (p === 'Low') return <span className="flex items-center bg-green-600 text-white px-3 py-1 rounded-full text-xs font-black uppercase"><ArrowDown className="w-4 h-4 mr-1"/> Low</span>
       return <span className="flex items-center bg-blue-600 text-white px-3 py-1 rounded-full text-xs font-black uppercase"><Minus className="w-4 h-4 mr-1"/> Routine</span>
+  }
+
+  const getPriorityColor = (p: string) => {
+    if (p === 'Critical') return 'bg-red-100 text-red-800 border-red-200'
+    if (p === 'Low') return 'bg-green-100 text-green-800 border-green-200'
+    return 'bg-blue-100 text-blue-800 border-blue-200'
   }
 
   if (loading) return <div className="p-8 font-bold text-xl">Loading...</div>
@@ -242,7 +245,7 @@ export default function VehicleDetails() {
         </div>
       </div>
 
-      {/* 2. IDENTITY & STATS */}
+      {/* 2. IDENTITY & STATS (UPDATED WITH STATUS FIELD) */}
       <div className="bg-white rounded-lg shadow-md p-6 mb-6">
         <div className="flex justify-between items-center mb-4 border-b border-gray-100 pb-3">
             <h2 className="text-xl font-black text-gray-900">Vehicle Identity & Stats</h2>
@@ -260,16 +263,29 @@ export default function VehicleDetails() {
             <div><label className="block text-xs font-extrabold text-gray-500 uppercase tracking-wider mb-1">Location (TOB)</label>{isEditing ? <select value={editFormData.tob} onChange={(e) => setEditFormData({...editFormData, tob: e.target.value})} className="w-full p-2 border-2 border-blue-200 rounded font-bold">{tobList.map(t => <option key={t} value={t}>{t}</option>)}</select> : <p className="text-lg font-bold text-gray-900">{vehicle.tob}</p>}</div>
             <div><label className="block text-xs font-extrabold text-gray-500 uppercase tracking-wider mb-1">Type</label>{isEditing ? <select value={editFormData.vehicle_type_id} onChange={(e) => setEditFormData({...editFormData, vehicle_type_id: e.target.value})} className="w-full p-2 border-2 border-blue-200 rounded font-bold">{types.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}</select> : <p className="text-lg font-bold text-gray-900">{vehicle.vehicle_type_name}</p>}</div>
             <div><label className="block text-xs font-extrabold text-gray-500 uppercase tracking-wider mb-1">Mileage</label>{isEditing ? <input type="number" value={editFormData.mileage} onChange={(e) => setEditFormData({...editFormData, mileage: Number(e.target.value)})} className="w-full p-2 border-2 border-blue-200 rounded font-bold"/> : <p className="text-lg font-bold text-gray-900">{vehicle.mileage} km</p>}</div>
+            
+            {/* NEW FIELD: VEHICLE STATUS */}
+            <div>
+               <label className="block text-xs font-extrabold text-gray-500 uppercase tracking-wider mb-1">Vehicle Status</label>
+               {isEditing ? (
+                  <select value={editFormData.status} onChange={(e) => setEditFormData({...editFormData, status: e.target.value})} className="w-full p-2 border-2 border-blue-200 rounded font-bold">
+                      {vehicleStatuses.map(s => <option key={s} value={s}>{s}</option>)}
+                  </select>
+               ) : (
+                  <span className={`px-3 py-1 text-sm font-black rounded-full inline-block ${vehicle.status === 'Active' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
+                    {vehicle.status}
+                  </span>
+               )}
+            </div>
+
             <div className="md:col-span-2"><label className="block text-xs font-extrabold text-gray-500 uppercase tracking-wider mb-1">Op. Category</label>{isEditing ? <select value={editFormData.operational_category} onChange={(e) => setEditFormData({...editFormData, operational_category: e.target.value})} className="w-full p-2 border-2 border-blue-200 rounded font-bold">{opCats.map(c => <option key={c} value={c}>{c}</option>)}</select> : <span className={`px-3 py-1 text-sm font-black rounded-full inline-block ${vehicle.operational_category === 'Fully Mission Capable' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>{vehicle.operational_category}</span>}</div>
         </div>
       </div>
 
-      {/* 3. REPORT NEW ISSUE (FULL FORM) */}
+      {/* 3. REPORT NEW ISSUE */}
       <div className="bg-white p-6 rounded-lg shadow-md mb-8 border-t-4 border-orange-500">
           <h2 className="text-xl font-black mb-4 flex items-center text-orange-700"><AlertTriangle className="w-6 h-6 mr-2" /> Report New Issue</h2>
-          
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              {/* LEFT COLUMN: BASIC INFO */}
               <div className="space-y-4">
                   <div>
                       <p className="text-xs font-bold text-gray-500 uppercase mb-1">1. Fault Description (Required)</p>
@@ -295,7 +311,6 @@ export default function VehicleDetails() {
                   </div>
               </div>
 
-              {/* RIGHT COLUMN: WORKSHOP OFFICER FIELDS */}
               <div className="bg-gray-50 p-4 rounded-lg border border-gray-200 space-y-3">
                   <h3 className="text-sm font-black uppercase text-gray-400 flex items-center"><User className="w-4 h-4 mr-1"/> Workshop / Officer Section</h3>
                   <div className="grid grid-cols-2 gap-3">
@@ -314,7 +329,6 @@ export default function VehicleDetails() {
                   <input type="text" value={genNotes} onChange={(e) => setGenNotes(e.target.value)} className="w-full p-2 border rounded font-bold text-sm" placeholder="Any Other Notes" />
               </div>
           </div>
-
           <button onClick={handleSubmitLog} disabled={uploading} className="w-full mt-4 bg-orange-600 text-white py-3 rounded-lg font-black text-lg hover:bg-orange-700 shadow-md">
              {uploading ? 'Uploading...' : 'Submit Full Report'}
           </button>
@@ -330,8 +344,6 @@ export default function VehicleDetails() {
             
             {logs.map((log) => (
                 <div key={log.id} className="p-5 hover:bg-white transition-colors border-l-4 border-transparent hover:border-blue-500">
-                    
-                    {/* Header: Priority | Updated Date | Status */}
                     <div className="flex flex-col md:flex-row justify-between items-start mb-4">
                         <div className="flex flex-wrap items-center gap-3">
                             {getPriorityBadge(log.priority)}
@@ -347,30 +359,15 @@ export default function VehicleDetails() {
                         </span>
                     </div>
                     
-                    {/* Main Description */}
                     <p className="text-xl font-black text-gray-900 mb-4 pl-1 border-l-2 border-gray-300">{log.description}</p>
 
-                    {/* Officer Data Grid */}
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4 bg-gray-100/50 p-4 rounded-lg border border-gray-200">
-                         <div>
-                             <p className="text-[10px] uppercase font-bold text-gray-400 mb-1">Action Required</p>
-                             <p className="font-bold text-sm text-gray-800">{log.action_required || '---'}</p>
-                         </div>
-                         <div>
-                             <p className="text-[10px] uppercase font-bold text-gray-400 mb-1">Responsible Person</p>
-                             <p className="font-bold text-sm text-gray-800">{log.responsible_person || '---'}</p>
-                         </div>
-                         <div>
-                             <p className="text-[10px] uppercase font-bold text-gray-400 mb-1">Officer Remarks</p>
-                             <p className="font-bold text-sm text-gray-800">{log.remarks || '---'}</p>
-                         </div>
-                         <div>
-                             <p className="text-[10px] uppercase font-bold text-gray-400 mb-1">Notes</p>
-                             <p className="font-bold text-sm text-gray-800">{log.notes || '---'}</p>
-                         </div>
+                         <div><p className="text-[10px] uppercase font-bold text-gray-400 mb-1">Action Required</p><p className="font-bold text-sm text-gray-800">{log.action_required || '---'}</p></div>
+                         <div><p className="text-[10px] uppercase font-bold text-gray-400 mb-1">Responsible Person</p><p className="font-bold text-sm text-gray-800">{log.responsible_person || '---'}</p></div>
+                         <div><p className="text-[10px] uppercase font-bold text-gray-400 mb-1">Officer Remarks</p><p className="font-bold text-sm text-gray-800">{log.remarks || '---'}</p></div>
+                         <div><p className="text-[10px] uppercase font-bold text-gray-400 mb-1">Notes</p><p className="font-bold text-sm text-gray-800">{log.notes || '---'}</p></div>
                     </div>
                     
-                    {/* Evidence */}
                     <div className="mt-2 p-3 bg-white rounded-lg border border-gray-200">
                         <h4 className="text-xs font-black text-gray-400 uppercase flex items-center mb-2"><ImageIcon className="w-3 h-3 mr-1"/> Evidence</h4>
                         <div className="flex flex-wrap gap-2">

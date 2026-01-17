@@ -2,7 +2,7 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
-import { ArrowLeft, Filter, Search, Car, MapPin, Activity } from 'lucide-react'
+import { ArrowLeft, Search, Car, MapPin, Activity } from 'lucide-react'
 import Link from 'next/link'
 
 export default function AllVehiclesPage() {
@@ -50,7 +50,7 @@ export default function AllVehiclesPage() {
     const matchesSearch = (v.vehicle_uid || '').toLowerCase().includes(search.toLowerCase())
     const matchesType = filterType === 'All' || v.vehicle_type_name === filterType
     const matchesTob = filterTob === 'All' || v.tob === filterTob
-    const matchesStatus = filterStatus === 'All' || v.operational_category === filterStatus // Filtering by Op Status
+    const matchesStatus = filterStatus === 'All' || v.operational_category === filterStatus
     
     return matchesSearch && matchesType && matchesTob && matchesStatus
   })
@@ -129,7 +129,7 @@ export default function AllVehiclesPage() {
                 onChange={(e) => setFilterStatus(e.target.value)}
                 className="w-full pl-10 p-2.5 border-2 border-gray-200 rounded-lg font-bold text-gray-700 outline-none focus:border-blue-500 cursor-pointer appearance-none bg-white"
              >
-                <option value="All">All Statuses</option>
+                <option value="All">All Op Status</option>
                 {statusList.map(s => <option key={s} value={s}>{s}</option>)}
              </select>
         </div>
@@ -140,14 +140,13 @@ export default function AllVehiclesPage() {
         {filteredVehicles.map((vehicle) => (
             <Link key={vehicle.id} href={`/vehicle/${vehicle.id}`} className="group bg-white rounded-xl shadow-md hover:shadow-xl transition-all duration-300 border border-gray-200 overflow-hidden flex flex-col">
                 
-                {/* 1. FIXED ASPECT RATIO IMAGE BOX */}
+                {/* 1. IMAGE BOX */}
                 <div className="w-full aspect-[4/3] bg-gray-100 relative overflow-hidden border-b border-gray-100">
                     <img 
                         src={vehicle.vehicle_image_url || 'https://placehold.co/600x400?text=No+Image'} 
                         alt="Vehicle"
                         className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
                     />
-                    {/* Status Badge Overlay */}
                     <div className="absolute top-2 right-2">
                         <span className={`text-[10px] uppercase font-black px-2 py-1 rounded shadow-sm border ${vehicle.status === 'Active' ? 'bg-green-500 text-white border-green-600' : 'bg-red-600 text-white border-red-700'}`}>
                             {vehicle.status === 'Active' ? 'Active' : 'Inactive'}
@@ -166,7 +165,6 @@ export default function AllVehiclesPage() {
                         <MapPin className="w-4 h-4 mr-1 text-gray-400" /> {vehicle.tob}
                     </div>
 
-                    {/* Operational Status Pill */}
                     <div className="mt-auto pt-2 border-t border-gray-100">
                          <span className={`block text-center text-xs font-black uppercase tracking-wide px-2 py-1.5 rounded ${getStatusColor(vehicle.operational_category)}`}>
                             {vehicle.operational_category || 'Unknown Status'}
@@ -184,12 +182,8 @@ export default function AllVehiclesPage() {
                   <Car className="w-10 h-10 text-gray-400" />
               </div>
               <h3 className="text-xl font-bold text-gray-600">No vehicles match your filters.</h3>
-              <button onClick={() => {setFilterType('All'); setFilterTob('All'); setFilterStatus('All'); setSearch('')}} className="mt-4 text-blue-600 font-bold hover:underline">
-                  Clear all filters
-              </button>
           </div>
       )}
-
     </div>
   )
 }

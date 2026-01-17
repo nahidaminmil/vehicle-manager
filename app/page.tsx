@@ -1,7 +1,7 @@
 "use client"
 import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase'
-import { Car, CheckCircle, XCircle, AlertTriangle, Plus, Search, BarChart3 } from 'lucide-react'
+import { Car, CheckCircle, XCircle, AlertTriangle, Plus, Search, BarChart3, Grid } from 'lucide-react'
 import Link from 'next/link'
 
 export default function Dashboard() {
@@ -56,9 +56,9 @@ export default function Dashboard() {
           <p className="text-gray-800 font-medium">Military Vehicle Accountability System</p>
         </div>
         <div className="flex gap-3 w-full md:w-auto">
-           {/* NEW BUTTON ADDED HERE */}
+           {/* NEW BUTTON: All Vehicles */}
            <Link href="/all-vehicles" className="flex-1 md:flex-none flex items-center justify-center bg-gray-800 hover:bg-black text-white px-4 py-3 rounded-lg font-bold shadow-md transition-colors">
-             <Car className="w-5 h-5 mr-2" /> All Vehicles
+             <Grid className="w-5 h-5 mr-2" /> All Vehicles
            </Link>
 
            <Link href="/analytics" className="flex-1 md:flex-none flex items-center justify-center bg-purple-700 hover:bg-purple-800 text-white px-4 py-3 rounded-lg font-bold shadow-md transition-colors">
