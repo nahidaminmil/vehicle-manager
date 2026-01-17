@@ -153,14 +153,16 @@ export default function VehicleDetails() {
       </button>
 
       {/* Image Banner */}
-      <div className="bg-white rounded-lg shadow-lg overflow-hidden mb-6">
-        <div className="relative h-64 bg-gray-200">
-           {/* Force refresh image by adding timestamp query param */}
-           <img 
-              src={vehicle.vehicle_image_url ? `${vehicle.vehicle_image_url}?t=${Date.now()}` : 'https://placehold.co/600x400?text=No+Image'} 
-              className="w-full h-full object-cover"
-              alt="Vehicle"
-           />
+      {/* 1. aspect-[4/3] keeps the box shape fixed like a standard photo */}
+{/* 2. bg-black looks better for photos */}
+<div className="relative w-full aspect-[4/3] md:aspect-video bg-black rounded-t-lg overflow-hidden">
+   <img 
+      src={vehicle.vehicle_image_url ? `${vehicle.vehicle_image_url}?t=${Date.now()}` : 'https://placehold.co/600x400?text=No+Image'} 
+      
+      /* 3. object-contain ensures the WHOLE car fits inside the box */
+      className="w-full h-full object-contain"
+      alt="Vehicle"
+   />
            <label className="absolute bottom-4 right-4 bg-blue-600 hover:bg-blue-700 text-white p-3 rounded-full cursor-pointer shadow-lg flex items-center">
              <Camera className="w-6 h-6" />
              <input type="file" accept="image/*" className="hidden" onChange={handleImageUpload} disabled={uploading} />
