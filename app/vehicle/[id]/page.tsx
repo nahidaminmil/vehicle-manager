@@ -5,7 +5,7 @@ import { supabase } from '@/lib/supabase'
 import { 
   ArrowLeft, CheckCircle, AlertTriangle, Camera, Wrench, 
   CheckSquare, Clock, Edit2, X, Save, Trash2, Plus, 
-  ImageIcon, UploadCloud, User, AlertOctagon, Minus, ArrowDown 
+  ImageIcon, User, AlertOctagon, Minus, ArrowDown, Calendar, FileText, ClipboardList
 } from 'lucide-react'
 
 export default function VehicleDetails() {
@@ -20,7 +20,7 @@ export default function VehicleDetails() {
   const [types, setTypes] = useState<any[]>([])     
   const [loading, setLoading] = useState(true)
   
-  // --- EDIT STATE ---
+  // --- EDIT PROFILE STATE ---
   const [isEditing, setIsEditing] = useState(false)
   const [editFormData, setEditFormData] = useState({
     vehicle_uid: '', tob: '', vehicle_type_id: '', mileage: 0, operational_category: ''
@@ -31,12 +31,18 @@ export default function VehicleDetails() {
   const [newStatus, setNewStatus] = useState('')
   const [inactiveDate, setInactiveDate] = useState('')
   
-  // New Log Form Data
+  // --- NEW ISSUE REPORT DATA ---
   const [remark, setRemark] = useState('')
-  const [actionReq, setActionReq] = useState('')
-  const [responsible, setResponsible] = useState('')
   const [priority, setPriority] = useState('Routine')
   const [logFile, setLogFile] = useState<File | null>(null)
+  
+  // Officer / Workshop Fields
+  const [actionReq, setActionReq] = useState('')
+  const [responsible, setResponsible] = useState('')
+  const [estDays, setEstDays] = useState('')
+  const [officerRemarks, setOfficerRemarks] = useState('')
+  const [genNotes, setGenNotes] = useState('')
+  const [maintStatus, setMaintStatus] = useState('Pending')
 
   // --- LISTS ---
   const tobList = ['NDROMO', 'BAYOO', 'RHOO', 'DRODRO']
@@ -44,14 +50,10 @@ export default function VehicleDetails() {
   
   // --- FETCH DATA ---
   async function fetchData() {
-    // 1. Vehicle
     const { data: vehicleData } = await supabase.from('vehicle_dashboard_view').select('*').eq('id', id).single()
-    // 2. Types
     const { data: typesData } = await supabase.from('vehicle_types').select('*')
-    // 3. Gallery
     const { data: galleryData } = await supabase.from('vehicle_gallery').select('*').eq('vehicle_id', id).order('created_at', { ascending: false })
-    // 4. Logs
-    const { data: logData } = await supabase.from('maintenance_logs').select('*').eq('vehicle_id', id).order('created_at', { ascending: false })
+    const { data: logData } = await supabase.from('maintenance_logs').select('*').eq('vehicle_id', id).order('logged_date', { ascending: false })
 
     if (vehicleData) {
       setVehicle(vehicleData)
@@ -60,7 +62,6 @@ export default function VehicleDetails() {
       setGallery(galleryData || [])
       setLogs(logData || [])
       
-      // 5. Evidence
       if (logData && logData.length > 0) {
           const logIds = logData.map(l => l.id)
           const { data: evidenceData } = await supabase.from('log_evidence').select('*').in('log_id', logIds)
@@ -91,7 +92,7 @@ export default function VehicleDetails() {
 
   useEffect(() => { if (id) fetchData() }, [id])
 
-  // --- HELPER: Image Resizer ---
+  // --- IMAGE RESIZER ---
   const resizeImage = (file: File): Promise<Blob> => {
     return new Promise((resolve) => {
       const img = document.createElement('img')
@@ -111,7 +112,7 @@ export default function VehicleDetails() {
     })
   }
 
-  // --- UPLOAD HANDLERS ---
+  // --- ACTIONS ---
   async function handleMainUpload(event: any) {
     if (gallery.length >= 10) return alert('Max 10 profile photos allowed.')
     try {
@@ -159,25 +160,29 @@ export default function VehicleDetails() {
     alert('Status Updated!'); router.refresh(); window.location.reload()
   }
 
-  // --- SUBMIT LOG ---
+  // --- SUBMIT FULL LOG ---
   async function handleSubmitLog() {
     if (!remark) return alert('Please write a fault description.')
     
     setUploading(true)
     try {
-        // 1. Insert Log
         const { data: newLog, error } = await supabase.from('maintenance_logs').insert({ 
             vehicle_id: vehicle.id, 
             description: remark, 
             priority, 
+            status: maintStatus,
+            
+            // Officer Fields
             action_required: actionReq, 
             responsible_person: responsible, 
-            status: 'Pending' 
+            estimated_repair_days: estDays ? parseInt(estDays) : 0,
+            remarks: officerRemarks,
+            notes: genNotes,
+            logged_date: new Date().toISOString() // Information Updated On
         }).select().single()
 
         if(error) throw error
 
-        // 2. Upload Photo (if exists)
         if (logFile && newLog) {
             const blob = await resizeImage(logFile)
             const fileName = `log_${newLog.id}_${Date.now()}.jpg`
@@ -187,35 +192,25 @@ export default function VehicleDetails() {
             await supabase.from('log_evidence').insert({ log_id: newLog.id, image_url: publicUrl })
         }
 
-        // 3. Reset
-        alert('Log Submitted Successfully!')
-        setRemark('')
-        setActionReq('')
-        setResponsible('')
-        setLogFile(null)
-        setPriority('Routine')
+        alert('Issue Reported Successfully!')
+        // Reset Form
+        setRemark(''); setActionReq(''); setResponsible(''); setLogFile(null); 
+        setPriority('Routine'); setEstDays(''); setOfficerRemarks(''); setGenNotes(''); setMaintStatus('Pending');
         
-        // 4. REFRESH DATA (Crucial Step)
         await fetchData() 
 
     } catch (err: any) {
-        alert("Error submitting log: " + err.message)
+        alert("Error submitting: " + err.message)
     } finally {
         setUploading(false)
     }
   }
 
-  // --- ICONS HELPER ---
-  const getPriorityIcon = (p: string) => {
-      if (p === 'Critical') return <AlertOctagon className="w-4 h-4 text-red-600 mr-1" />
-      if (p === 'Low') return <ArrowDown className="w-4 h-4 text-green-600 mr-1" />
-      return <Minus className="w-4 h-4 text-blue-600 mr-1" />
-  }
-
-  const getPriorityColor = (p: string) => {
-    if (p === 'Critical') return 'bg-red-100 text-red-800 border-red-200'
-    if (p === 'Low') return 'bg-green-100 text-green-800 border-green-200'
-    return 'bg-blue-100 text-blue-800 border-blue-200'
+  // --- PRIORITY UI HELPERS ---
+  const getPriorityBadge = (p: string) => {
+      if (p === 'Critical') return <span className="flex items-center bg-red-600 text-white px-3 py-1 rounded-full text-xs font-black uppercase"><AlertOctagon className="w-4 h-4 mr-1"/> Critical</span>
+      if (p === 'Low') return <span className="flex items-center bg-green-600 text-white px-3 py-1 rounded-full text-xs font-black uppercase"><ArrowDown className="w-4 h-4 mr-1"/> Low</span>
+      return <span className="flex items-center bg-blue-600 text-white px-3 py-1 rounded-full text-xs font-black uppercase"><Minus className="w-4 h-4 mr-1"/> Routine</span>
   }
 
   if (loading) return <div className="p-8 font-bold text-xl">Loading...</div>
@@ -227,18 +222,17 @@ export default function VehicleDetails() {
         <ArrowLeft className="w-5 h-5 mr-2" /> Back to Dashboard
       </button>
 
-      {/* 1. MAIN PROFILE GALLERY */}
+      {/* 1. PROFILE PHOTOS */}
       <div className="bg-white rounded-lg shadow-md overflow-hidden mb-6 p-4 border-t-4 border-blue-600">
         <div className="flex justify-between items-center mb-4">
-            <h2 className="text-lg font-black text-gray-800 flex items-center"><Camera className="w-5 h-5 mr-2"/> Vehicle Profile Photos ({gallery.length}/10)</h2>
+            <h2 className="text-lg font-black text-gray-800 flex items-center"><Camera className="w-5 h-5 mr-2"/> Profile Photos ({gallery.length}/10)</h2>
             <label className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-2 rounded-md cursor-pointer flex items-center text-sm font-bold shadow-sm transition-colors">
-                <Plus className="w-4 h-4 mr-1" /> Add Profile Photo
-                {/* Mobile Camera Enabled */}
+                <Plus className="w-4 h-4 mr-1" /> Add Photo
                 <input type="file" accept="image/*" capture="environment" className="hidden" onChange={handleMainUpload} disabled={uploading || gallery.length >= 10} />
             </label>
         </div>
         <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-            {gallery.length === 0 && <div className="col-span-full h-32 bg-gray-50 rounded-lg border-2 border-dashed border-gray-300 flex items-center justify-center text-gray-400 font-bold">No profile photos added yet.</div>}
+            {gallery.length === 0 && <div className="col-span-full h-32 bg-gray-50 rounded-lg border-2 border-dashed border-gray-300 flex items-center justify-center text-gray-400 font-bold">No profile photos yet.</div>}
             {gallery.map((p) => (
                 <div key={p.id} className="relative aspect-square group rounded-lg overflow-hidden shadow-sm border border-gray-200">
                     <img src={p.image_url} className="w-full h-full object-cover" alt="Profile" />
@@ -262,186 +256,132 @@ export default function VehicleDetails() {
             )}
         </div>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div>
-                <label className="block text-xs font-extrabold text-gray-500 uppercase tracking-wider mb-1">Vehicle ID</label>
-                {isEditing ? <input type="text" value={editFormData.vehicle_uid} onChange={(e) => setEditFormData({...editFormData, vehicle_uid: e.target.value})} className="w-full p-2 border-2 border-blue-200 rounded font-bold text-gray-900 outline-none"/> 
-                : <p className="text-lg font-black text-gray-900">{vehicle.vehicle_uid || '---'}</p>}
-            </div>
-            <div>
-                <label className="block text-xs font-extrabold text-gray-500 uppercase tracking-wider mb-1">Location (TOB)</label>
-                {isEditing ? <select value={editFormData.tob} onChange={(e) => setEditFormData({...editFormData, tob: e.target.value})} className="w-full p-2 border-2 border-blue-200 rounded font-bold text-gray-900">{tobList.map(t => <option key={t} value={t}>{t}</option>)}</select> 
-                : <p className="text-lg font-bold text-gray-900">{vehicle.tob || '---'}</p>}
-            </div>
-             <div>
-                <label className="block text-xs font-extrabold text-gray-500 uppercase tracking-wider mb-1">Vehicle Type</label>
-                {isEditing ? <select value={editFormData.vehicle_type_id} onChange={(e) => setEditFormData({...editFormData, vehicle_type_id: e.target.value})} className="w-full p-2 border-2 border-blue-200 rounded font-bold text-gray-900">{types.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}</select> 
-                : <p className="text-lg font-bold text-gray-900">{vehicle.vehicle_type_name || '---'}</p>}
-            </div>
-            <div>
-                <label className="block text-xs font-extrabold text-gray-500 uppercase tracking-wider mb-1">Mileage (KM)</label>
-                {isEditing ? <input type="number" value={editFormData.mileage} onChange={(e) => setEditFormData({...editFormData, mileage: Number(e.target.value)})} className="w-full p-2 border-2 border-blue-200 rounded font-bold text-gray-900 outline-none"/> 
-                : <p className="text-lg font-bold text-gray-900">{vehicle.mileage ? `${vehicle.mileage.toLocaleString()}` : '0'} km</p>}
-            </div>
-            <div className="md:col-span-2">
-                <label className="block text-xs font-extrabold text-gray-500 uppercase tracking-wider mb-1">Operational Category</label>
-                {isEditing ? (
-                    <select value={editFormData.operational_category} onChange={(e) => setEditFormData({...editFormData, operational_category: e.target.value})} className="w-full p-2 border-2 border-blue-200 rounded font-bold text-gray-900">
-                        {opCats.map(c => <option key={c} value={c}>{c}</option>)}
-                    </select>
-                ) : (
-                    <span className={`px-3 py-1 text-sm font-black rounded-full inline-block ${vehicle.operational_category === 'Fully Mission Capable' ? 'bg-green-100 text-green-800 border border-green-200' : 'bg-red-100 text-red-800 border border-red-200'}`}>
-                        {vehicle.operational_category || 'Fully Mission Capable'}
-                    </span>
-                )}
-            </div>
+            <div><label className="block text-xs font-extrabold text-gray-500 uppercase tracking-wider mb-1">Vehicle ID</label>{isEditing ? <input type="text" value={editFormData.vehicle_uid} onChange={(e) => setEditFormData({...editFormData, vehicle_uid: e.target.value})} className="w-full p-2 border-2 border-blue-200 rounded font-bold"/> : <p className="text-lg font-black text-gray-900">{vehicle.vehicle_uid}</p>}</div>
+            <div><label className="block text-xs font-extrabold text-gray-500 uppercase tracking-wider mb-1">Location (TOB)</label>{isEditing ? <select value={editFormData.tob} onChange={(e) => setEditFormData({...editFormData, tob: e.target.value})} className="w-full p-2 border-2 border-blue-200 rounded font-bold">{tobList.map(t => <option key={t} value={t}>{t}</option>)}</select> : <p className="text-lg font-bold text-gray-900">{vehicle.tob}</p>}</div>
+            <div><label className="block text-xs font-extrabold text-gray-500 uppercase tracking-wider mb-1">Type</label>{isEditing ? <select value={editFormData.vehicle_type_id} onChange={(e) => setEditFormData({...editFormData, vehicle_type_id: e.target.value})} className="w-full p-2 border-2 border-blue-200 rounded font-bold">{types.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}</select> : <p className="text-lg font-bold text-gray-900">{vehicle.vehicle_type_name}</p>}</div>
+            <div><label className="block text-xs font-extrabold text-gray-500 uppercase tracking-wider mb-1">Mileage</label>{isEditing ? <input type="number" value={editFormData.mileage} onChange={(e) => setEditFormData({...editFormData, mileage: Number(e.target.value)})} className="w-full p-2 border-2 border-blue-200 rounded font-bold"/> : <p className="text-lg font-bold text-gray-900">{vehicle.mileage} km</p>}</div>
+            <div className="md:col-span-2"><label className="block text-xs font-extrabold text-gray-500 uppercase tracking-wider mb-1">Op. Category</label>{isEditing ? <select value={editFormData.operational_category} onChange={(e) => setEditFormData({...editFormData, operational_category: e.target.value})} className="w-full p-2 border-2 border-blue-200 rounded font-bold">{opCats.map(c => <option key={c} value={c}>{c}</option>)}</select> : <span className={`px-3 py-1 text-sm font-black rounded-full inline-block ${vehicle.operational_category === 'Fully Mission Capable' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>{vehicle.operational_category}</span>}</div>
         </div>
       </div>
 
-      {/* 3. STATUS MANAGER */}
-      <div className="bg-white p-6 rounded-lg shadow-md mb-6 border-t-4 border-gray-800">
-          <h2 className="text-xl font-black mb-4 flex items-center text-gray-900"><CheckCircle className="w-6 h-6 mr-2 text-green-600" /> Update Status</h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4 bg-gray-50 p-4 rounded-lg border border-gray-200">
-             <div>
-                <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Current Status</label>
-                <select value={newStatus} onChange={(e) => setNewStatus(e.target.value)} className="block w-full p-3 border-2 border-gray-300 rounded-md font-bold text-gray-900 text-lg">
-                    <option value="Active">🟢 Active (Ready)</option>
-                    <option value="Inactive">🔴 Inactive (Off Road)</option>
-                    <option value="Maintenance">🟠 Maintenance</option>
-                </select>
-             </div>
-             {newStatus === 'Inactive' && (
-                 <div>
-                    <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Inactive Since Date:</label>
-                    <input type="date" value={inactiveDate} onChange={(e) => setInactiveDate(e.target.value)} className="w-full p-3 border-2 border-gray-300 rounded-md font-bold text-gray-900" />
-                 </div>
-             )}
-          </div>
-          <button onClick={handleUpdateStatus} className="w-full py-4 bg-gray-900 text-white rounded-lg font-black text-lg hover:bg-black transition-colors shadow-md">Save Status Change</button>
-      </div>
-
-      {/* 4. REPORT NEW ISSUE (IMPROVED) */}
+      {/* 3. REPORT NEW ISSUE (FULL FORM) */}
       <div className="bg-white p-6 rounded-lg shadow-md mb-8 border-t-4 border-orange-500">
           <h2 className="text-xl font-black mb-4 flex items-center text-orange-700"><AlertTriangle className="w-6 h-6 mr-2" /> Report New Issue</h2>
           
-          {/* Description */}
-          <p className="text-sm text-gray-600 mb-2 font-bold uppercase">1. Fault Description:</p>
-          <textarea value={remark} onChange={(e) => setRemark(e.target.value)} className="w-full p-3 border-2 border-gray-300 rounded-md h-24 mb-4 font-bold text-gray-900 focus:border-orange-500 placeholder-gray-400" placeholder="E.g., Flat tire on front left, engine overheating..." />
-          
-          {/* Input Fields (Officer) */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-             <div>
-                 <p className="text-xs font-bold text-gray-500 uppercase mb-1">Required Action (Optional)</p>
-                 <input type="text" value={actionReq} onChange={(e) => setActionReq(e.target.value)} className="w-full p-3 border-2 border-gray-300 rounded-md font-bold" placeholder="e.g. Needs replacement" />
-             </div>
-             <div>
-                 <p className="text-xs font-bold text-gray-500 uppercase mb-1">Person Responsible (Optional)</p>
-                 <input type="text" value={responsible} onChange={(e) => setResponsible(e.target.value)} className="w-full p-3 border-2 border-gray-300 rounded-md font-bold" placeholder="e.g. Sgt. John" />
-             </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {/* LEFT COLUMN: BASIC INFO */}
+              <div className="space-y-4">
+                  <div>
+                      <p className="text-xs font-bold text-gray-500 uppercase mb-1">1. Fault Description (Required)</p>
+                      <textarea value={remark} onChange={(e) => setRemark(e.target.value)} className="w-full p-3 border-2 border-gray-300 rounded-md h-24 font-bold focus:border-orange-500" placeholder="Describe fault..." />
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                       <div>
+                            <p className="text-xs font-bold text-gray-500 uppercase mb-1">Priority</p>
+                            <select value={priority} onChange={(e) => setPriority(e.target.value)} className="w-full p-2 border-2 border-gray-300 rounded font-bold">
+                                <option value="Low">Low</option>
+                                <option value="Routine">Routine</option>
+                                <option value="Critical">Critical</option>
+                            </select>
+                       </div>
+                       <div>
+                            <p className="text-xs font-bold text-gray-500 uppercase mb-1">Photo Evidence</p>
+                            <label className="cursor-pointer w-full flex items-center justify-center p-2 border-2 border-dashed border-gray-400 rounded hover:bg-gray-50 bg-white">
+                                <Camera className="w-4 h-4 mr-2 text-gray-600"/>
+                                <span className="text-xs font-bold text-gray-700 truncate">{logFile ? "Photo Selected" : "Take Photo"}</span>
+                                <input type="file" accept="image/*" capture="environment" className="hidden" onChange={(e) => setLogFile(e.target.files ? e.target.files[0] : null)} />
+                            </label>
+                       </div>
+                  </div>
+              </div>
+
+              {/* RIGHT COLUMN: WORKSHOP OFFICER FIELDS */}
+              <div className="bg-gray-50 p-4 rounded-lg border border-gray-200 space-y-3">
+                  <h3 className="text-sm font-black uppercase text-gray-400 flex items-center"><User className="w-4 h-4 mr-1"/> Workshop / Officer Section</h3>
+                  <div className="grid grid-cols-2 gap-3">
+                      <input type="text" value={actionReq} onChange={(e) => setActionReq(e.target.value)} className="w-full p-2 border rounded font-bold text-sm" placeholder="Action Required" />
+                      <input type="text" value={responsible} onChange={(e) => setResponsible(e.target.value)} className="w-full p-2 border rounded font-bold text-sm" placeholder="Resp. Person" />
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                      <input type="number" value={estDays} onChange={(e) => setEstDays(e.target.value)} className="w-full p-2 border rounded font-bold text-sm" placeholder="Est. Repair Days" />
+                      <select value={maintStatus} onChange={(e) => setMaintStatus(e.target.value)} className="w-full p-2 border rounded font-bold text-sm">
+                          <option value="Pending">Status: Pending</option>
+                          <option value="In Progress">Status: In Progress</option>
+                          <option value="Resolved">Status: Resolved</option>
+                      </select>
+                  </div>
+                  <input type="text" value={officerRemarks} onChange={(e) => setOfficerRemarks(e.target.value)} className="w-full p-2 border rounded font-bold text-sm" placeholder="Workshop Officer Remarks" />
+                  <input type="text" value={genNotes} onChange={(e) => setGenNotes(e.target.value)} className="w-full p-2 border rounded font-bold text-sm" placeholder="Any Other Notes" />
+              </div>
           </div>
 
-          {/* Priority & Camera */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-             <div>
-                <p className="text-xs font-bold text-gray-500 uppercase mb-1">Priority Level</p>
-                <select value={priority} onChange={(e) => setPriority(e.target.value)} className="w-full p-3 border-2 border-gray-300 rounded-md font-bold text-gray-900 bg-white">
-                    <option value="Low">🟢 Low Priority</option>
-                    <option value="Routine">🔵 Routine Priority</option>
-                    <option value="Critical">🔴 Critical Priority</option>
-                </select>
-             </div>
-             
-             {/* MOBILE CAMERA SUPPORT ADDED HERE */}
-             <div>
-                <p className="text-xs font-bold text-gray-500 uppercase mb-1">Attach Photo (Optional)</p>
-                <div className="flex items-center">
-                    <label className="cursor-pointer w-full flex items-center justify-center p-3 border-2 border-dashed border-gray-400 rounded-md hover:bg-gray-50 transition-colors">
-                        <Camera className="w-5 h-5 mr-2 text-gray-600"/>
-                        <span className="text-sm font-bold text-gray-700 truncate">
-                            {logFile ? logFile.name : "Tap to Take Photo"}
-                        </span>
-                        {/* capture="environment" opens the rear camera immediately on mobile */}
-                        <input type="file" accept="image/*" capture="environment" className="hidden" onChange={(e) => setLogFile(e.target.files ? e.target.files[0] : null)} />
-                    </label>
-                    {logFile && <button onClick={() => setLogFile(null)} className="ml-2 text-red-600 font-bold"><X/></button>}
-                </div>
-             </div>
-          </div>
-
-          {/* Submit Button */}
-          <button onClick={handleSubmitLog} disabled={uploading} className="w-full bg-orange-600 text-white py-4 rounded-lg font-black text-lg hover:bg-orange-700 shadow-md transition-colors flex justify-center items-center">
-             {uploading ? 'Submitting & Uploading...' : 'Submit Log & Photo'}
+          <button onClick={handleSubmitLog} disabled={uploading} className="w-full mt-4 bg-orange-600 text-white py-3 rounded-lg font-black text-lg hover:bg-orange-700 shadow-md">
+             {uploading ? 'Uploading...' : 'Submit Full Report'}
           </button>
       </div>
 
-      {/* 5. MAINTENANCE HISTORY (FULL DATA VISIBLE) */}
+      {/* 4. MAINTENANCE HISTORY */}
       <div className="bg-white rounded-lg shadow-lg overflow-hidden border border-gray-200">
-        <div className="p-4 bg-gray-800 border-b border-gray-900 flex items-center">
-            <Wrench className="w-5 h-5 mr-2 text-white" />
-            <h3 className="text-lg font-black text-white uppercase tracking-wider">Maintenance History & Evidence</h3>
+        <div className="p-4 bg-gray-800 border-b border-gray-900 flex items-center justify-between">
+            <h3 className="text-lg font-black text-white uppercase tracking-wider flex items-center"><Wrench className="w-5 h-5 mr-2" /> Maintenance History</h3>
         </div>
         <div className="divide-y divide-gray-200 bg-gray-50">
-            {logs.length === 0 && <div className="p-8 text-center text-gray-500 font-bold text-lg">No maintenance records found.</div>}
+            {logs.length === 0 && <div className="p-8 text-center text-gray-500 font-bold">No maintenance records found.</div>}
             
             {logs.map((log) => (
                 <div key={log.id} className="p-5 hover:bg-white transition-colors border-l-4 border-transparent hover:border-blue-500">
                     
-                    {/* Header: Priority Icon | Date | Status */}
-                    <div className="flex flex-col md:flex-row justify-between items-start mb-3">
-                        <div className="flex items-center gap-3 mb-2 md:mb-0">
-                            {/* NEW: Priority Icons */}
-                            <span className={`px-3 py-1 text-xs font-black uppercase tracking-wider rounded-full flex items-center ${getPriorityColor(log.priority)}`}>
-                                {getPriorityIcon(log.priority)} {log.priority}
+                    {/* Header: Priority | Updated Date | Status */}
+                    <div className="flex flex-col md:flex-row justify-between items-start mb-4">
+                        <div className="flex flex-wrap items-center gap-3">
+                            {getPriorityBadge(log.priority)}
+                            <span className="text-xs text-gray-500 font-bold flex items-center bg-gray-100 px-2 py-1 rounded">
+                                <Clock className="w-3 h-3 mr-1"/> Updated: {log.logged_date ? new Date(log.logged_date).toLocaleString() : '---'}
                             </span>
-                            
-                            {/* NEW: Information Updated On */}
-                            <span className="text-sm text-gray-500 font-bold flex items-center">
-                                <Clock className="w-4 h-4 mr-1 text-gray-400"/>
-                                {new Date(log.created_at).toLocaleString()} 
+                             <span className="text-xs text-gray-500 font-bold flex items-center bg-gray-100 px-2 py-1 rounded">
+                                <Calendar className="w-3 h-3 mr-1"/> Est. Days: {log.estimated_repair_days || 0}
                             </span>
                         </div>
-
-                        {log.status !== 'Resolved' ? 
-                           <span className="px-3 py-1 text-xs font-bold text-orange-600 bg-orange-100 rounded-full border border-orange-200">Pending Action</span>
-                           : <span className="px-3 py-1.5 text-xs font-black uppercase tracking-wider text-green-800 bg-green-100 rounded-full flex items-center"><CheckCircle className="w-4 h-4 mr-1"/> Resolved</span>
-                        }
+                        <span className={`px-3 py-1 text-xs font-black uppercase rounded-full ${log.status === 'Resolved' ? 'bg-green-100 text-green-800' : 'bg-orange-100 text-orange-800'}`}>
+                            {log.status}
+                        </span>
                     </div>
                     
-                    {/* MAIN INFO: Description */}
-                    <div className="mb-4">
-                        <p className="text-lg font-black text-gray-900">{log.description}</p>
-                    </div>
+                    {/* Main Description */}
+                    <p className="text-xl font-black text-gray-900 mb-4 pl-1 border-l-2 border-gray-300">{log.description}</p>
 
-                    {/* NEW: Officer Input Fields VISIBLE */}
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4 bg-gray-50 p-3 rounded-lg border border-gray-200">
-                        <div>
-                             <p className="text-[10px] uppercase font-bold text-gray-500 mb-1 flex items-center"><AlertOctagon className="w-3 h-3 mr-1"/> Action Required</p>
-                             <p className="text-sm font-bold text-gray-800">{log.action_required || "---"}</p>
-                        </div>
-                        <div>
-                             <p className="text-[10px] uppercase font-bold text-gray-500 mb-1 flex items-center"><User className="w-3 h-3 mr-1"/> Responsible Person</p>
-                             <p className="text-sm font-bold text-gray-800">{log.responsible_person || "---"}</p>
-                        </div>
+                    {/* Officer Data Grid */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4 bg-gray-100/50 p-4 rounded-lg border border-gray-200">
+                         <div>
+                             <p className="text-[10px] uppercase font-bold text-gray-400 mb-1">Action Required</p>
+                             <p className="font-bold text-sm text-gray-800">{log.action_required || '---'}</p>
+                         </div>
+                         <div>
+                             <p className="text-[10px] uppercase font-bold text-gray-400 mb-1">Responsible Person</p>
+                             <p className="font-bold text-sm text-gray-800">{log.responsible_person || '---'}</p>
+                         </div>
+                         <div>
+                             <p className="text-[10px] uppercase font-bold text-gray-400 mb-1">Officer Remarks</p>
+                             <p className="font-bold text-sm text-gray-800">{log.remarks || '---'}</p>
+                         </div>
+                         <div>
+                             <p className="text-[10px] uppercase font-bold text-gray-400 mb-1">Notes</p>
+                             <p className="font-bold text-sm text-gray-800">{log.notes || '---'}</p>
+                         </div>
                     </div>
                     
-                    {/* Evidence Section */}
-                    <div className="mt-4 p-4 bg-gray-200/50 rounded-xl border-2 border-gray-300/50">
-                        <h4 className="text-sm font-black text-gray-700 uppercase flex items-center mb-3"><ImageIcon className="w-4 h-4 mr-2"/> Evidence Photos</h4>
-                        <div className="flex flex-wrap gap-3">
-                            {(!evidence[log.id] || evidence[log.id].length === 0) ? (
-                                <div className="text-sm text-gray-500 font-bold italic py-2">No photos attached.</div>
-                            ) : (
+                    {/* Evidence */}
+                    <div className="mt-2 p-3 bg-white rounded-lg border border-gray-200">
+                        <h4 className="text-xs font-black text-gray-400 uppercase flex items-center mb-2"><ImageIcon className="w-3 h-3 mr-1"/> Evidence</h4>
+                        <div className="flex flex-wrap gap-2">
+                            {(!evidence[log.id] || evidence[log.id].length === 0) ? <span className="text-xs italic text-gray-400">No photos.</span> : 
                                 evidence[log.id].map((pic: any) => (
-                                    <div key={pic.id} className="relative w-24 h-24 group rounded-lg overflow-hidden shadow-sm border-2 border-white">
-                                        <img src={pic.image_url} className="w-full h-full object-cover cursor-pointer hover:scale-110 transition-transform" onClick={()=>window.open(pic.image_url, '_blank')} alt="Evidence" />
-                                        <button onClick={() => deleteEvidencePhoto(pic.id)} className="absolute top-1 right-1 bg-red-600 text-white rounded-full p-1 shadow-md opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-700"><X className="w-3 h-3"/></button>
-                                    </div>
+                                    <img key={pic.id} src={pic.image_url} className="w-16 h-16 object-cover rounded border cursor-pointer hover:scale-110 transition-transform" onClick={()=>window.open(pic.image_url, '_blank')} />
                                 ))
-                            )}
-                            {/* Add More Button (Camera Enabled) */}
-                            <label className="cursor-pointer w-24 h-24 flex flex-col items-center justify-center bg-white border-2 border-dashed border-gray-400 rounded-lg hover:bg-blue-50 transition-colors text-blue-600">
-                                <Plus className="w-6 h-6 mb-1"/>
-                                <span className="text-[10px] font-bold uppercase">Add More</span>
-                                <input type="file" accept="image/*" capture="environment" className="hidden" onChange={(e) => handleLogUpload(e, log.id)} disabled={uploading} />
+                            }
+                            <label className="cursor-pointer w-16 h-16 flex flex-col items-center justify-center border-2 border-dashed border-gray-300 rounded hover:bg-blue-50 text-blue-500">
+                                <Plus className="w-4 h-4"/>
+                                <input type="file" accept="image/*" capture="environment" className="hidden" onChange={(e) => handleLogUpload(e, log.id)} />
                             </label>
                         </div>
                     </div>
