@@ -2,7 +2,7 @@
 import { useEffect, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
-import { ArrowLeft, CheckCircle, AlertTriangle, Camera, Wrench, CheckSquare, Clock, Edit2, X, Save } from 'lucide-react'
+import { ArrowLeft, CheckCircle, AlertTriangle, Camera, Wrench, CheckSquare, Clock, Edit2, X, Save, Trash2, Plus } from 'lucide-react'
 
 export default function VehicleDetails() {
   const { id } = useParams()
@@ -10,6 +10,7 @@ export default function VehicleDetails() {
   
   // Data State
   const [vehicle, setVehicle] = useState<any>(null)
+  const [gallery, setGallery] = useState<any[]>([]) // Stores the list of 10 photos
   const [logs, setLogs] = useState<any[]>([])
   const [types, setTypes] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
@@ -38,41 +39,45 @@ export default function VehicleDetails() {
 
   // 1. Fetch Data
   async function fetchData() {
-    // A. Get Vehicle Details (FROM VIEW for safety)
-    const { data: vehicleData, error: vError } = await supabase
+    // A. Vehicle Details (From View)
+    const { data: vehicleData } = await supabase
       .from('vehicle_dashboard_view')
       .select('*')
       .eq('id', id)
       .single()
 
-    // B. Get Types (For Dropdown)
+    // B. Vehicle Types
     const { data: typesData } = await supabase.from('vehicle_types').select('*')
 
-    // C. Get Logs
+    // C. Gallery Photos (New!)
+    const { data: galleryData } = await supabase
+      .from('vehicle_gallery')
+      .select('*')
+      .eq('vehicle_id', id)
+      .order('created_at', { ascending: false })
+
+    // D. Logs
     const { data: logData } = await supabase
       .from('maintenance_logs')
       .select('*')
       .eq('vehicle_id', id)
       .order('created_at', { ascending: false })
 
-    if (vError) {
-        console.error("Fetch Error:", vError)
-    } else {
+    if (vehicleData) {
       setVehicle(vehicleData)
       setNewStatus(vehicleData.status)
       setTypes(typesData || [])
+      setGallery(galleryData || [])
       setLogs(logData || [])
       
-      // Init Edit Form
       setEditFormData({
         vehicle_uid: vehicleData.vehicle_uid || '',
         tob: vehicleData.tob || 'NDROMO',
-        vehicle_type_id: vehicleData.vehicle_type_id || '', // Now available from View
+        vehicle_type_id: vehicleData.vehicle_type_id || '',
         mileage: vehicleData.mileage || 0,
         operational_category: vehicleData.operational_category || 'Fully Mission Capable'
       })
 
-      // Format Date
       if (vehicleData.inactive_since) {
         setInactiveDate(new Date(vehicleData.inactive_since).toISOString().split('T')[0])
       } else {
@@ -83,15 +88,6 @@ export default function VehicleDetails() {
   }
 
   useEffect(() => { if (id) fetchData() }, [id])
-
-  // --- CALCULATOR: Days Inactive ---
-  function getDaysInactive() {
-    if (newStatus === 'Active' || !vehicle?.inactive_since) return 0
-    const start = new Date(vehicle.inactive_since).getTime()
-    const now = new Date().getTime()
-    const diff = now - start
-    return Math.floor(diff / (1000 * 3600 * 24))
-  }
 
   // --- HELPER: Image Resizer ---
   const resizeImage = (file: File): Promise<Blob> => {
@@ -113,25 +109,56 @@ export default function VehicleDetails() {
     })
   }
 
-  // 2. Upload Image
+  // 2. Upload Image (Multi-Slot Logic)
   async function handleImageUpload(event: any) {
+    if (gallery.length >= 10) {
+        alert('Maximum 10 photos allowed. Please delete some first.')
+        return
+    }
+
     try {
       const file = event.target.files[0]
       if (!file) return
       setUploading(true)
+      
       const resizedBlob = await resizeImage(file)
       const fileName = `${vehicle.id}_${Date.now()}.jpg`
+      
+      // A. Upload to Storage
       const { error: uploadError } = await supabase.storage.from('vehicle-media').upload(fileName, resizedBlob, { contentType: 'image/jpeg', upsert: true })
       if (uploadError) throw uploadError
+      
       const { data: { publicUrl } } = supabase.storage.from('vehicle-media').getPublicUrl(fileName)
-      const { error: dbError } = await supabase.from('vehicles').update({ vehicle_image_url: publicUrl }).eq('id', vehicle.id)
-      if (dbError) throw dbError
-      alert('Photo Updated!')
-      window.location.reload()
-    } catch (error) { alert('Error uploading image.') } finally { setUploading(false) }
+
+      // B. Add to Gallery Table
+      const { error: galleryError } = await supabase.from('vehicle_gallery').insert({
+          vehicle_id: vehicle.id,
+          image_url: publicUrl
+      })
+      if (galleryError) throw galleryError
+
+      // C. Update Main Thumbnail (Always show the latest one on dashboard)
+      await supabase.from('vehicles').update({ vehicle_image_url: publicUrl }).eq('id', vehicle.id)
+
+      alert('Photo Added!')
+      fetchData() // Refresh gallery
+    } catch (error: any) { 
+        alert('Error uploading: ' + error.message) 
+    } finally { 
+        setUploading(false) 
+    }
   }
 
-  // 3. Save Profile
+  // 3. Delete Photo
+  async function deletePhoto(photoId: string) {
+    if (!confirm('Are you sure you want to delete this photo?')) return
+
+    const { error } = await supabase.from('vehicle_gallery').delete().eq('id', photoId)
+    if (error) alert('Error deleting photo')
+    else fetchData()
+  }
+
+  // 4. Save Profile
   async function saveProfile() {
     const { error } = await supabase
       .from('vehicles')
@@ -148,7 +175,7 @@ export default function VehicleDetails() {
     else { setIsEditing(false); fetchData() }
   }
 
-  // 4. Update Status
+  // 5. Update Status
   async function handleUpdateStatus() {
     if (!vehicle) return
     const dateToSave = newStatus === 'Inactive' ? (new Date(inactiveDate).toISOString()) : null
@@ -157,7 +184,7 @@ export default function VehicleDetails() {
     else { alert('Status Updated!'); router.refresh(); window.location.reload() }
   }
 
-  // 5. Add Log
+  // 6. Add Log
   async function handleAddLog() {
     if (!remark) return alert('Please write a fault description')
     const { error } = await supabase.from('maintenance_logs').insert({
@@ -172,7 +199,7 @@ export default function VehicleDetails() {
     else { alert('Log Added'); setRemark(''); setActionReq(''); setResponsible(''); fetchData() }
   }
 
-  // 6. Resolve Log
+  // 7. Resolve Log
   async function resolveLog(logId: string) {
     const { error } = await supabase.from('maintenance_logs').update({ status: 'Resolved' }).eq('id', logId)
     if (error) alert('Error updating log'); else fetchData()
@@ -187,23 +214,46 @@ export default function VehicleDetails() {
         <ArrowLeft className="w-5 h-5 mr-2" /> Back
       </button>
 
-      {/* 1. Image Banner */}
-      <div className="bg-white rounded-lg shadow-lg overflow-hidden mb-6">
-        <div className="relative w-full aspect-[4/3] md:aspect-video bg-black rounded-t-lg overflow-hidden">
-           <img 
-              src={vehicle.vehicle_image_url ? `${vehicle.vehicle_image_url}?t=${Date.now()}` : 'https://placehold.co/600x400?text=No+Image'} 
-              className="w-full h-full object-contain"
-              alt="Vehicle"
-           />
-           <label className="absolute bottom-4 right-4 bg-blue-600 hover:bg-blue-700 text-white p-3 rounded-full cursor-pointer shadow-lg flex items-center">
-             <Camera className="w-6 h-6" />
-             <input type="file" accept="image/*" className="hidden" onChange={handleImageUpload} disabled={uploading} />
-             <span className="ml-2 font-bold text-sm">{uploading ? 'Processing...' : 'Update Photo'}</span>
-           </label>
+      {/* 1. PHOTO GALLERY SECTION (Updated) */}
+      <div className="bg-white rounded-lg shadow-lg overflow-hidden mb-6 p-4">
+        <h2 className="text-lg font-bold text-gray-800 mb-4 flex justify-between items-center">
+            <span>Vehicle Photos ({gallery.length}/10)</span>
+            <label className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg cursor-pointer flex items-center text-sm">
+                <Plus className="w-4 h-4 mr-2" /> Add Photo
+                <input type="file" accept="image/*" className="hidden" onChange={handleImageUpload} disabled={uploading || gallery.length >= 10} />
+            </label>
+        </h2>
+
+        {/* The Grid */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            {/* If empty, show placeholder */}
+            {gallery.length === 0 && (
+                <div className="col-span-full h-40 bg-gray-100 rounded-lg flex items-center justify-center text-gray-400">
+                    No photos added yet.
+                </div>
+            )}
+
+            {/* Photo List */}
+            {gallery.map((photo) => (
+                <div key={photo.id} className="relative aspect-square group">
+                    <img 
+                        src={photo.image_url} 
+                        className="w-full h-full object-cover rounded-lg border border-gray-200 shadow-sm" 
+                        alt="Evidence" 
+                    />
+                    {/* Delete Button (Visible on Hover/Tap) */}
+                    <button 
+                        onClick={() => deletePhoto(photo.id)}
+                        className="absolute top-2 right-2 bg-red-600 text-white p-1.5 rounded-full shadow-md opacity-90 hover:opacity-100 transition-opacity"
+                    >
+                        <Trash2 className="w-4 h-4" />
+                    </button>
+                </div>
+            ))}
         </div>
       </div>
 
-      {/* 2. Vehicle Identity Card (EDITABLE) */}
+      {/* 2. Vehicle Identity Card */}
       <div className="bg-white rounded-lg shadow-md p-6 mb-6">
         <div className="flex justify-between items-center mb-4 border-b pb-2">
             <h2 className="text-xl font-bold text-gray-800">Vehicle Identity & Stats</h2>
@@ -220,15 +270,12 @@ export default function VehicleDetails() {
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {/* Registration */}
             <div>
                 <label className="block text-xs font-bold text-gray-500 uppercase">Vehicle ID</label>
                 {isEditing ? (
                     <input type="text" value={editFormData.vehicle_uid} onChange={(e) => setEditFormData({...editFormData, vehicle_uid: e.target.value})} className="w-full mt-1 p-2 border rounded font-bold"/>
                 ) : <p className="font-bold text-lg">{vehicle.vehicle_uid || '---'}</p>}
             </div>
-
-            {/* TOB */}
             <div>
                 <label className="block text-xs font-bold text-gray-500 uppercase">Location (TOB)</label>
                 {isEditing ? (
@@ -237,8 +284,6 @@ export default function VehicleDetails() {
                     </select>
                 ) : <p className="font-bold text-lg">{vehicle.tob || '---'}</p>}
             </div>
-
-             {/* Type */}
              <div>
                 <label className="block text-xs font-bold text-gray-500 uppercase">Vehicle Type</label>
                 {isEditing ? (
@@ -247,16 +292,12 @@ export default function VehicleDetails() {
                     </select>
                 ) : <p className="font-bold text-lg">{vehicle.vehicle_type_name || '---'}</p>}
             </div>
-
-            {/* Mileage */}
             <div>
                 <label className="block text-xs font-bold text-gray-500 uppercase">Mileage (KM)</label>
                 {isEditing ? (
                     <input type="number" value={editFormData.mileage} onChange={(e) => setEditFormData({...editFormData, mileage: Number(e.target.value)})} className="w-full mt-1 p-2 border rounded font-bold"/>
                 ) : <p className="font-bold text-lg">{vehicle.mileage ? `${vehicle.mileage.toLocaleString()} km` : '0 km'}</p>}
             </div>
-
-            {/* Op Category */}
             <div className="md:col-span-2">
                 <label className="block text-xs font-bold text-gray-500 uppercase">Op. Category</label>
                 {isEditing ? (
@@ -289,7 +330,7 @@ export default function VehicleDetails() {
           <button onClick={handleUpdateStatus} className="w-full py-3 bg-blue-600 text-white rounded-md font-bold hover:bg-blue-700">Save Status Change</button>
       </div>
 
-      {/* 4. Detailed Fault Reporting */}
+      {/* 4. Fault Reporting */}
       <div className="bg-white p-6 rounded-lg shadow-md mb-6">
           <h2 className="text-xl font-bold mb-4 flex items-center"><AlertTriangle className="w-6 h-6 mr-2 text-orange-500" /> Report Issue</h2>
           <textarea value={remark} onChange={(e) => setRemark(e.target.value)} className="w-full p-3 border border-gray-300 rounded-md h-24 mb-3 font-medium" placeholder="Fault Description..." />
@@ -306,7 +347,7 @@ export default function VehicleDetails() {
           </div>
       </div>
 
-      {/* 5. Maintenance History */}
+      {/* 5. Logs */}
       <div className="bg-white rounded-lg shadow-md overflow-hidden">
         <div className="p-4 bg-gray-100 border-b border-gray-200 flex items-center">
             <Wrench className="w-5 h-5 mr-2 text-gray-600" />
