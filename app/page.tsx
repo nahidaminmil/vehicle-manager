@@ -1,8 +1,8 @@
 "use client"
 import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase'
-import { useRouter } from 'next/navigation' // Added for security redirects
-import { Car, CheckCircle, XCircle, AlertTriangle, Plus, Search, BarChart3, Grid } from 'lucide-react'
+import { useRouter } from 'next/navigation'
+import { Car, CheckCircle, XCircle, AlertTriangle, Plus, Search, BarChart3, Grid, LogOut } from 'lucide-react'
 import Link from 'next/link'
 
 export default function Dashboard() {
@@ -14,27 +14,26 @@ export default function Dashboard() {
 
   useEffect(() => {
     async function checkUserAndFetch() {
-      // 1. SECURITY CHECK: Is user logged in?
+      // 1. SECURITY CHECK
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) {
-        router.push('/login') // Redirect to Login if not signed in
+        router.push('/login')
         return
       }
 
-      // 2. ROLE CHECK: Where should they go?
+      // 2. ROLE CHECK
       const { data: profile } = await supabase
         .from('profiles')
         .select('*')
         .eq('id', user.id)
         .single()
 
-      // If they are a Vehicle User, force them to their vehicle page
       if (profile?.role === 'vehicle_user' && profile?.assigned_vehicle_id) {
         router.replace(`/vehicle/${profile.assigned_vehicle_id}`)
         return
       }
 
-      // 3. FETCH DATA (Only for Admins/Commanders)
+      // 3. FETCH DATA
       const { data, error } = await supabase
         .from('vehicle_dashboard_view')
         .select('*')
@@ -50,6 +49,13 @@ export default function Dashboard() {
     }
     checkUserAndFetch()
   }, [])
+
+  // --- LOGOUT FUNCTION ---
+  async function handleLogout() {
+    await supabase.auth.signOut()
+    router.push('/login')
+    router.refresh()
+  }
 
   function calculateStats(data: any[]) {
     const total = data.length
@@ -77,7 +83,15 @@ export default function Dashboard() {
           <h1 className="text-3xl font-black text-gray-900 tracking-tight">COMMAND DASHBOARD</h1>
           <p className="text-gray-800 font-medium">Military Vehicle Accountability System</p>
         </div>
-        <div className="flex gap-3 w-full md:w-auto">
+        
+        <div className="flex flex-wrap gap-3 w-full md:w-auto items-center">
+           {/* LOGOUT BUTTON (NEW) */}
+           <button onClick={handleLogout} className="flex-1 md:flex-none flex items-center justify-center bg-red-600 hover:bg-red-700 text-white px-4 py-3 rounded-lg font-bold shadow-md transition-colors mr-2">
+             <LogOut className="w-5 h-5 mr-2" /> Sign Out
+           </button>
+
+           <div className="w-px h-10 bg-gray-300 hidden md:block mx-2"></div>
+
            <Link href="/all-vehicles" className="flex-1 md:flex-none flex items-center justify-center bg-gray-800 hover:bg-black text-white px-4 py-3 rounded-lg font-bold shadow-md transition-colors">
              <Grid className="w-5 h-5 mr-2" /> All Vehicles
            </Link>
