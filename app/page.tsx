@@ -150,6 +150,10 @@ function StatCard({ title, value, icon, color }: any) {
       <div className="p-3 bg-white/20 rounded-full">
         {icon}
       </div>
+      {/* FLOATING ACTION BUTTON (Mobile Friendly) */}
+      <Link href="/add-vehicle" className="fixed bottom-6 right-6 bg-blue-600 hover:bg-blue-700 text-white p-4 rounded-full shadow-2xl transition-transform hover:scale-110 flex items-center justify-center z-50">
+        <Plus className="w-8 h-8" />
+      </Link>
     </div>
   )
 }
