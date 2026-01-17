@@ -1,18 +1,40 @@
 "use client"
 import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase'
+import { useRouter } from 'next/navigation' // Added for security redirects
 import { Car, CheckCircle, XCircle, AlertTriangle, Plus, Search, BarChart3, Grid } from 'lucide-react'
 import Link from 'next/link'
 
 export default function Dashboard() {
+  const router = useRouter()
   const [vehicles, setVehicles] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [errorMsg, setErrorMsg] = useState('') 
   const [filter, setFilter] = useState('')
 
   useEffect(() => {
-    async function fetchVehicles() {
-      // 1. Read from the View
+    async function checkUserAndFetch() {
+      // 1. SECURITY CHECK: Is user logged in?
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) {
+        router.push('/login') // Redirect to Login if not signed in
+        return
+      }
+
+      // 2. ROLE CHECK: Where should they go?
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', user.id)
+        .single()
+
+      // If they are a Vehicle User, force them to their vehicle page
+      if (profile?.role === 'vehicle_user' && profile?.assigned_vehicle_id) {
+        router.replace(`/vehicle/${profile.assigned_vehicle_id}`)
+        return
+      }
+
+      // 3. FETCH DATA (Only for Admins/Commanders)
       const { data, error } = await supabase
         .from('vehicle_dashboard_view')
         .select('*')
@@ -26,7 +48,7 @@ export default function Dashboard() {
       }
       setLoading(false)
     }
-    fetchVehicles()
+    checkUserAndFetch()
   }, [])
 
   function calculateStats(data: any[]) {
@@ -44,7 +66,7 @@ export default function Dashboard() {
     (v.tob || '').toLowerCase().includes(filter.toLowerCase())
   )
 
-  if (loading) return <div className="p-8 text-xl font-bold text-gray-900">Loading Command Dashboard...</div>
+  if (loading) return <div className="min-h-screen flex items-center justify-center bg-gray-100"><div className="text-xl font-black text-gray-900">Verifying Security Clearance...</div></div>
 
   return (
     <div className="min-h-screen bg-gray-100 p-4 md:p-8">
@@ -56,11 +78,9 @@ export default function Dashboard() {
           <p className="text-gray-800 font-medium">Military Vehicle Accountability System</p>
         </div>
         <div className="flex gap-3 w-full md:w-auto">
-           {/* NEW BUTTON: All Vehicles */}
            <Link href="/all-vehicles" className="flex-1 md:flex-none flex items-center justify-center bg-gray-800 hover:bg-black text-white px-4 py-3 rounded-lg font-bold shadow-md transition-colors">
              <Grid className="w-5 h-5 mr-2" /> All Vehicles
            </Link>
-
            <Link href="/analytics" className="flex-1 md:flex-none flex items-center justify-center bg-purple-700 hover:bg-purple-800 text-white px-4 py-3 rounded-lg font-bold shadow-md transition-colors">
              <BarChart3 className="w-5 h-5 mr-2" /> Analytics
            </Link>
@@ -87,8 +107,6 @@ export default function Dashboard() {
 
       {/* Main List Section */}
       <div className="bg-white rounded-xl shadow-lg border border-gray-200 overflow-hidden">
-        
-        {/* Search Bar */}
         <div className="p-5 border-b border-gray-200 bg-gray-50 flex items-center">
           <Search className="w-5 h-5 text-gray-600 mr-3" />
           <input 
@@ -98,8 +116,6 @@ export default function Dashboard() {
             onChange={(e) => setFilter(e.target.value)}
           />
         </div>
-
-        {/* Table */}
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse">
             <thead className="bg-gray-100 text-gray-900 uppercase text-sm font-extrabold tracking-wider">
@@ -114,44 +130,27 @@ export default function Dashboard() {
             <tbody className="divide-y divide-gray-200 bg-white">
               {filteredVehicles.map((vehicle: any) => (
                 <tr key={vehicle.id} className="hover:bg-blue-50 transition-colors">
-                  <td className="px-6 py-4 font-black text-gray-900 whitespace-nowrap">
-                    {vehicle.vehicle_uid}
-                  </td>
-                  <td className="px-6 py-4 font-bold text-gray-800 whitespace-nowrap">
-                    {vehicle.vehicle_type_name || '---'}
-                  </td>
-                  <td className="px-6 py-4 font-bold text-gray-800 whitespace-nowrap">
-                    {vehicle.tob || '---'}
-                  </td>
+                  <td className="px-6 py-4 font-black text-gray-900 whitespace-nowrap">{vehicle.vehicle_uid}</td>
+                  <td className="px-6 py-4 font-bold text-gray-800 whitespace-nowrap">{vehicle.vehicle_type_name || '---'}</td>
+                  <td className="px-6 py-4 font-bold text-gray-800 whitespace-nowrap">{vehicle.tob || '---'}</td>
                   <td className="px-6 py-4 whitespace-nowrap">
-                    <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wide ${
-                      vehicle.status === 'Active' 
-                        ? 'bg-green-100 text-green-800 border border-green-200' 
-                        : 'bg-red-100 text-red-800 border border-red-200'
-                    }`}>
+                    <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wide ${vehicle.status === 'Active' ? 'bg-green-100 text-green-800 border border-green-200' : 'bg-red-100 text-red-800 border border-red-200'}`}>
                       {vehicle.status === 'Active' ? '● Ready' : '● Inactive'}
                     </span>
                   </td>
                   <td className="px-6 py-4 text-right whitespace-nowrap">
-                    <Link href={`/vehicle/${vehicle.id}`} className="inline-block bg-gray-900 hover:bg-black text-white px-4 py-2 rounded-md font-bold text-sm shadow">
-                      View / Edit
-                    </Link>
+                    <Link href={`/vehicle/${vehicle.id}`} className="inline-block bg-gray-900 hover:bg-black text-white px-4 py-2 rounded-md font-bold text-sm shadow">View / Edit</Link>
                   </td>
                 </tr>
               ))}
               {filteredVehicles.length === 0 && (
-                <tr>
-                  <td colSpan={5} className="px-6 py-8 text-center text-gray-500 font-bold">
-                    No vehicles found.
-                  </td>
-                </tr>
+                <tr><td colSpan={5} className="px-6 py-8 text-center text-gray-500 font-bold">No vehicles found (or Access Restricted).</td></tr>
               )}
             </tbody>
           </table>
         </div>
       </div>
       
-      {/* FLOATING ACTION BUTTON */}
       <Link href="/add-vehicle" className="fixed bottom-6 right-6 bg-blue-600 hover:bg-blue-700 text-white p-4 rounded-full shadow-2xl transition-transform hover:scale-110 flex items-center justify-center z-50">
         <Plus className="w-8 h-8" />
       </Link>
@@ -166,9 +165,7 @@ function StatCard({ title, value, icon, color }: any) {
         <p className="text-sm font-medium opacity-90 uppercase">{title}</p>
         <p className="text-3xl font-black mt-1">{value}</p>
       </div>
-      <div className="p-3 bg-white/20 rounded-full">
-        {icon}
-      </div>
+      <div className="p-3 bg-white/20 rounded-full">{icon}</div>
     </div>
   )
 }
