@@ -2,7 +2,7 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase'
 import { useRouter } from 'next/navigation'
-import { Car, CheckCircle, XCircle, AlertTriangle, Plus, Search, BarChart3, Grid, LogOut, Users } from 'lucide-react'
+import { Car, CheckCircle, XCircle, AlertTriangle, Plus, Search, BarChart3, Grid, LogOut, Users, Shield } from 'lucide-react'
 import Link from 'next/link'
 
 export default function Dashboard() {
@@ -11,46 +11,42 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true)
   const [errorMsg, setErrorMsg] = useState('') 
   const [filter, setFilter] = useState('')
-  const [role, setRole] = useState('') // Stores 'super_admin', 'admin', etc.
+  const [role, setRole] = useState('') 
 
   useEffect(() => {
     async function checkUserAndFetch() {
-      // 1. SECURITY CHECK
       const { data: { user } } = await supabase.auth.getUser()
-      if (!user) {
-        router.push('/login')
-        return
-      }
+      if (!user) return router.push('/login')
 
-      // 2. ROLE CHECK
-      const { data: profile } = await supabase
+      // Fetch Profile
+      const { data: profile, error: profileError } = await supabase
         .from('profiles')
         .select('*')
         .eq('id', user.id)
         .single()
 
       if (profile) {
-          setRole(profile.role) // <--- THIS IS CRITICAL FOR THE BUTTON
+          console.log("User Role Found:", profile.role) // Check Console if issues persist
+          setRole(profile.role)
+      } else {
+          console.error("Profile Fetch Error:", profileError)
       }
 
-      // Redirect Vehicle Users away from dashboard
+      // Redirect Vehicle Users
       if (profile?.role === 'vehicle_user' && profile?.assigned_vehicle_id) {
         router.replace(`/vehicle/${profile.assigned_vehicle_id}`)
         return
       }
 
-      // 3. FETCH DATA
+      // Fetch Vehicles
       const { data, error } = await supabase
         .from('vehicle_dashboard_view')
         .select('*')
         .order('created_at', { ascending: false })
       
-      if (error) {
-        console.error('Error:', error)
-        setErrorMsg(error.message)
-      } else {
-        setVehicles(data || [])
-      }
+      if (error) setErrorMsg(error.message)
+      else setVehicles(data || [])
+      
       setLoading(false)
     }
     checkUserAndFetch()
@@ -86,7 +82,15 @@ export default function Dashboard() {
       <div className="flex flex-col md:flex-row justify-between items-center mb-8 gap-4">
         <div>
           <h1 className="text-3xl font-black text-gray-900 tracking-tight">COMMAND DASHBOARD</h1>
-          <p className="text-gray-800 font-medium">Military Vehicle Accountability System</p>
+          <div className="flex items-center gap-2">
+            <p className="text-gray-800 font-medium">Military Vehicle Accountability System</p>
+            {/* DEBUG BADGE: Shows your current role */}
+            {role && (
+                <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${role === 'super_admin' ? 'bg-purple-100 text-purple-700' : 'bg-gray-200 text-gray-600'}`}>
+                    {role.replace('_', ' ')}
+                </span>
+            )}
+          </div>
         </div>
         
         <div className="flex flex-wrap gap-3 w-full md:w-auto items-center">
@@ -96,7 +100,7 @@ export default function Dashboard() {
 
            <div className="w-px h-10 bg-gray-300 hidden md:block mx-2"></div>
 
-           {/* THE USERS BUTTON - Only shows for Super Admin */}
+           {/* USERS BUTTON - Strictly checks for 'super_admin' */}
            {role === 'super_admin' && (
                 <Link href="/users" className="flex-1 md:flex-none flex items-center justify-center bg-purple-900 hover:bg-black text-white px-4 py-3 rounded-lg font-bold shadow-md transition-colors mr-2">
                     <Users className="w-5 h-5 mr-2" /> Users
@@ -115,7 +119,7 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* ERROR MESSAGE DISPLAY */}
+      {/* ERROR MESSAGE */}
       {errorMsg && (
         <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative mb-4 font-bold">
           System Error: {errorMsg}
@@ -130,7 +134,7 @@ export default function Dashboard() {
         <StatCard title="Critical Attention" value={stats.critical} icon={<AlertTriangle />} color="bg-orange-600" />
       </div>
 
-      {/* Main List Section */}
+      {/* Main List */}
       <div className="bg-white rounded-xl shadow-lg border border-gray-200 overflow-hidden">
         <div className="p-5 border-b border-gray-200 bg-gray-50 flex items-center">
           <Search className="w-5 h-5 text-gray-600 mr-3" />
