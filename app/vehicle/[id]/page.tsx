@@ -2,7 +2,11 @@
 import { useEffect, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
-import { ArrowLeft, CheckCircle, AlertTriangle, Camera, Wrench, CheckSquare, Clock, Edit2, X, Save, Trash2, Plus, ImageIcon, UploadCloud } from 'lucide-react'
+import { 
+  ArrowLeft, CheckCircle, AlertTriangle, Camera, Wrench, 
+  CheckSquare, Clock, Edit2, X, Save, Trash2, Plus, 
+  ImageIcon, UploadCloud, User, AlertOctagon, Minus, ArrowDown 
+} from 'lucide-react'
 
 export default function VehicleDetails() {
   const { id } = useParams()
@@ -32,18 +36,21 @@ export default function VehicleDetails() {
   const [actionReq, setActionReq] = useState('')
   const [responsible, setResponsible] = useState('')
   const [priority, setPriority] = useState('Routine')
-  const [logFile, setLogFile] = useState<File | null>(null) // Store file before submit
+  const [logFile, setLogFile] = useState<File | null>(null)
 
   // --- LISTS ---
   const tobList = ['NDROMO', 'BAYOO', 'RHOO', 'DRODRO']
   const opCats = ['Fully Mission Capable', 'Degraded', 'Non-Mission Capable']
-  const priorityList = ['Low', 'Routine', 'Critical'] // The 3 options you wanted
-
+  
   // --- FETCH DATA ---
   async function fetchData() {
+    // 1. Vehicle
     const { data: vehicleData } = await supabase.from('vehicle_dashboard_view').select('*').eq('id', id).single()
+    // 2. Types
     const { data: typesData } = await supabase.from('vehicle_types').select('*')
+    // 3. Gallery
     const { data: galleryData } = await supabase.from('vehicle_gallery').select('*').eq('vehicle_id', id).order('created_at', { ascending: false })
+    // 4. Logs
     const { data: logData } = await supabase.from('maintenance_logs').select('*').eq('vehicle_id', id).order('created_at', { ascending: false })
 
     if (vehicleData) {
@@ -53,6 +60,7 @@ export default function VehicleDetails() {
       setGallery(galleryData || [])
       setLogs(logData || [])
       
+      // 5. Evidence
       if (logData && logData.length > 0) {
           const logIds = logData.map(l => l.id)
           const { data: evidenceData } = await supabase.from('log_evidence').select('*').in('log_id', logIds)
@@ -83,6 +91,7 @@ export default function VehicleDetails() {
 
   useEffect(() => { if (id) fetchData() }, [id])
 
+  // --- HELPER: Image Resizer ---
   const resizeImage = (file: File): Promise<Blob> => {
     return new Promise((resolve) => {
       const img = document.createElement('img')
@@ -117,7 +126,6 @@ export default function VehicleDetails() {
     } catch (e: any) { alert(e.message) } finally { setUploading(false) }
   }
 
-  // Used for adding photos to OLD logs in the history list
   async function handleLogUpload(event: any, logId: string) {
     try {
       const file = event.target.files[0]; if (!file) return; setUploading(true)
@@ -151,13 +159,13 @@ export default function VehicleDetails() {
     alert('Status Updated!'); router.refresh(); window.location.reload()
   }
 
-  // --- THE NEW SINGLE-STEP SUBMIT FUNCTION ---
+  // --- SUBMIT LOG ---
   async function handleSubmitLog() {
     if (!remark) return alert('Please write a fault description.')
     
     setUploading(true)
     try {
-        // 1. Create the Log entry first
+        // 1. Insert Log
         const { data: newLog, error } = await supabase.from('maintenance_logs').insert({ 
             vehicle_id: vehicle.id, 
             description: remark, 
@@ -169,30 +177,45 @@ export default function VehicleDetails() {
 
         if(error) throw error
 
-        // 2. If a file was selected, upload it immediately and attach to the new log
+        // 2. Upload Photo (if exists)
         if (logFile && newLog) {
             const blob = await resizeImage(logFile)
             const fileName = `log_${newLog.id}_${Date.now()}.jpg`
             const { error: uploadErr } = await supabase.storage.from('vehicle-media').upload(fileName, blob, { contentType: 'image/jpeg', upsert: true })
             if (uploadErr) throw uploadErr
-
             const { data: { publicUrl } } = supabase.storage.from('vehicle-media').getPublicUrl(fileName)
             await supabase.from('log_evidence').insert({ log_id: newLog.id, image_url: publicUrl })
         }
 
-        // 3. Reset Form
-        alert('Report Submitted Successfully!')
+        // 3. Reset
+        alert('Log Submitted Successfully!')
         setRemark('')
         setActionReq('')
         setResponsible('')
         setLogFile(null)
-        fetchData() // Refresh list
+        setPriority('Routine')
+        
+        // 4. REFRESH DATA (Crucial Step)
+        await fetchData() 
 
     } catch (err: any) {
         alert("Error submitting log: " + err.message)
     } finally {
         setUploading(false)
     }
+  }
+
+  // --- ICONS HELPER ---
+  const getPriorityIcon = (p: string) => {
+      if (p === 'Critical') return <AlertOctagon className="w-4 h-4 text-red-600 mr-1" />
+      if (p === 'Low') return <ArrowDown className="w-4 h-4 text-green-600 mr-1" />
+      return <Minus className="w-4 h-4 text-blue-600 mr-1" />
+  }
+
+  const getPriorityColor = (p: string) => {
+    if (p === 'Critical') return 'bg-red-100 text-red-800 border-red-200'
+    if (p === 'Low') return 'bg-green-100 text-green-800 border-green-200'
+    return 'bg-blue-100 text-blue-800 border-blue-200'
   }
 
   if (loading) return <div className="p-8 font-bold text-xl">Loading...</div>
@@ -210,7 +233,8 @@ export default function VehicleDetails() {
             <h2 className="text-lg font-black text-gray-800 flex items-center"><Camera className="w-5 h-5 mr-2"/> Vehicle Profile Photos ({gallery.length}/10)</h2>
             <label className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-2 rounded-md cursor-pointer flex items-center text-sm font-bold shadow-sm transition-colors">
                 <Plus className="w-4 h-4 mr-1" /> Add Profile Photo
-                <input type="file" accept="image/*" className="hidden" onChange={handleMainUpload} disabled={uploading || gallery.length >= 10} />
+                {/* Mobile Camera Enabled */}
+                <input type="file" accept="image/*" capture="environment" className="hidden" onChange={handleMainUpload} disabled={uploading || gallery.length >= 10} />
             </label>
         </div>
         <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
@@ -295,7 +319,7 @@ export default function VehicleDetails() {
           <button onClick={handleUpdateStatus} className="w-full py-4 bg-gray-900 text-white rounded-lg font-black text-lg hover:bg-black transition-colors shadow-md">Save Status Change</button>
       </div>
 
-      {/* 4. REPORT NEW ISSUE (UPDATED WORKFLOW) */}
+      {/* 4. REPORT NEW ISSUE (IMPROVED) */}
       <div className="bg-white p-6 rounded-lg shadow-md mb-8 border-t-4 border-orange-500">
           <h2 className="text-xl font-black mb-4 flex items-center text-orange-700"><AlertTriangle className="w-6 h-6 mr-2" /> Report New Issue</h2>
           
@@ -303,37 +327,40 @@ export default function VehicleDetails() {
           <p className="text-sm text-gray-600 mb-2 font-bold uppercase">1. Fault Description:</p>
           <textarea value={remark} onChange={(e) => setRemark(e.target.value)} className="w-full p-3 border-2 border-gray-300 rounded-md h-24 mb-4 font-bold text-gray-900 focus:border-orange-500 placeholder-gray-400" placeholder="E.g., Flat tire on front left, engine overheating..." />
           
-          {/* Extra Fields */}
+          {/* Input Fields (Officer) */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
              <div>
                  <p className="text-xs font-bold text-gray-500 uppercase mb-1">Required Action (Optional)</p>
-                 <input type="text" value={actionReq} onChange={(e) => setActionReq(e.target.value)} className="w-full p-3 border-2 border-gray-300 rounded-md font-bold" />
+                 <input type="text" value={actionReq} onChange={(e) => setActionReq(e.target.value)} className="w-full p-3 border-2 border-gray-300 rounded-md font-bold" placeholder="e.g. Needs replacement" />
              </div>
              <div>
                  <p className="text-xs font-bold text-gray-500 uppercase mb-1">Person Responsible (Optional)</p>
-                 <input type="text" value={responsible} onChange={(e) => setResponsible(e.target.value)} className="w-full p-3 border-2 border-gray-300 rounded-md font-bold" />
+                 <input type="text" value={responsible} onChange={(e) => setResponsible(e.target.value)} className="w-full p-3 border-2 border-gray-300 rounded-md font-bold" placeholder="e.g. Sgt. John" />
              </div>
           </div>
 
-          {/* Priority & Photo Attachment */}
+          {/* Priority & Camera */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
              <div>
                 <p className="text-xs font-bold text-gray-500 uppercase mb-1">Priority Level</p>
                 <select value={priority} onChange={(e) => setPriority(e.target.value)} className="w-full p-3 border-2 border-gray-300 rounded-md font-bold text-gray-900 bg-white">
-                    {priorityList.map(p => <option key={p} value={p}>{p}</option>)}
+                    <option value="Low">🟢 Low Priority</option>
+                    <option value="Routine">🔵 Routine Priority</option>
+                    <option value="Critical">🔴 Critical Priority</option>
                 </select>
              </div>
              
-             {/* THE NEW ATTACHMENT FIELD */}
+             {/* MOBILE CAMERA SUPPORT ADDED HERE */}
              <div>
                 <p className="text-xs font-bold text-gray-500 uppercase mb-1">Attach Photo (Optional)</p>
                 <div className="flex items-center">
                     <label className="cursor-pointer w-full flex items-center justify-center p-3 border-2 border-dashed border-gray-400 rounded-md hover:bg-gray-50 transition-colors">
-                        <UploadCloud className="w-5 h-5 mr-2 text-gray-600"/>
+                        <Camera className="w-5 h-5 mr-2 text-gray-600"/>
                         <span className="text-sm font-bold text-gray-700 truncate">
-                            {logFile ? logFile.name : "Tap to select photo..."}
+                            {logFile ? logFile.name : "Tap to Take Photo"}
                         </span>
-                        <input type="file" accept="image/*" className="hidden" onChange={(e) => setLogFile(e.target.files ? e.target.files[0] : null)} />
+                        {/* capture="environment" opens the rear camera immediately on mobile */}
+                        <input type="file" accept="image/*" capture="environment" className="hidden" onChange={(e) => setLogFile(e.target.files ? e.target.files[0] : null)} />
                     </label>
                     {logFile && <button onClick={() => setLogFile(null)} className="ml-2 text-red-600 font-bold"><X/></button>}
                 </div>
@@ -346,7 +373,7 @@ export default function VehicleDetails() {
           </button>
       </div>
 
-      {/* 5. MAINTENANCE HISTORY */}
+      {/* 5. MAINTENANCE HISTORY (FULL DATA VISIBLE) */}
       <div className="bg-white rounded-lg shadow-lg overflow-hidden border border-gray-200">
         <div className="p-4 bg-gray-800 border-b border-gray-900 flex items-center">
             <Wrench className="w-5 h-5 mr-2 text-white" />
@@ -357,24 +384,48 @@ export default function VehicleDetails() {
             
             {logs.map((log) => (
                 <div key={log.id} className="p-5 hover:bg-white transition-colors border-l-4 border-transparent hover:border-blue-500">
+                    
+                    {/* Header: Priority Icon | Date | Status */}
                     <div className="flex flex-col md:flex-row justify-between items-start mb-3">
                         <div className="flex items-center gap-3 mb-2 md:mb-0">
-                            <span className={`px-3 py-1 text-xs font-black uppercase tracking-wider rounded-full ${log.priority==='Critical'?'bg-red-600 text-white': log.priority==='Routine'?'bg-blue-100 text-blue-800':'bg-gray-200 text-gray-800'}`}>{log.priority}</span>
-                            <span className="text-sm text-gray-500 font-bold flex items-center"><Clock className="w-4 h-4 mr-1"/>{new Date(log.created_at).toLocaleDateString()}</span>
+                            {/* NEW: Priority Icons */}
+                            <span className={`px-3 py-1 text-xs font-black uppercase tracking-wider rounded-full flex items-center ${getPriorityColor(log.priority)}`}>
+                                {getPriorityIcon(log.priority)} {log.priority}
+                            </span>
+                            
+                            {/* NEW: Information Updated On */}
+                            <span className="text-sm text-gray-500 font-bold flex items-center">
+                                <Clock className="w-4 h-4 mr-1 text-gray-400"/>
+                                {new Date(log.created_at).toLocaleString()} 
+                            </span>
                         </div>
-                        {/* Resolve Button Logic */}
+
                         {log.status !== 'Resolved' ? 
-                           // Only show Resolve button if you want Admins to see it. Keeping it open for now.
-                           <button onClick={() => alert('Only admins should resolve (or add resolve logic)')} className="flex items-center text-xs bg-green-600 text-white px-3 py-1.5 rounded font-bold hover:bg-green-700 shadow-sm opacity-50 cursor-not-allowed"><CheckSquare className="w-4 h-4 mr-1"/> Pending</button> 
+                           <span className="px-3 py-1 text-xs font-bold text-orange-600 bg-orange-100 rounded-full border border-orange-200">Pending Action</span>
                            : <span className="px-3 py-1.5 text-xs font-black uppercase tracking-wider text-green-800 bg-green-100 rounded-full flex items-center"><CheckCircle className="w-4 h-4 mr-1"/> Resolved</span>
                         }
                     </div>
-                    <p className="text-lg font-black text-gray-900 mb-3">{log.description}</p>
+                    
+                    {/* MAIN INFO: Description */}
+                    <div className="mb-4">
+                        <p className="text-lg font-black text-gray-900">{log.description}</p>
+                    </div>
+
+                    {/* NEW: Officer Input Fields VISIBLE */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4 bg-gray-50 p-3 rounded-lg border border-gray-200">
+                        <div>
+                             <p className="text-[10px] uppercase font-bold text-gray-500 mb-1 flex items-center"><AlertOctagon className="w-3 h-3 mr-1"/> Action Required</p>
+                             <p className="text-sm font-bold text-gray-800">{log.action_required || "---"}</p>
+                        </div>
+                        <div>
+                             <p className="text-[10px] uppercase font-bold text-gray-500 mb-1 flex items-center"><User className="w-3 h-3 mr-1"/> Responsible Person</p>
+                             <p className="text-sm font-bold text-gray-800">{log.responsible_person || "---"}</p>
+                        </div>
+                    </div>
                     
                     {/* Evidence Section */}
                     <div className="mt-4 p-4 bg-gray-200/50 rounded-xl border-2 border-gray-300/50">
                         <h4 className="text-sm font-black text-gray-700 uppercase flex items-center mb-3"><ImageIcon className="w-4 h-4 mr-2"/> Evidence Photos</h4>
-                        
                         <div className="flex flex-wrap gap-3">
                             {(!evidence[log.id] || evidence[log.id].length === 0) ? (
                                 <div className="text-sm text-gray-500 font-bold italic py-2">No photos attached.</div>
@@ -386,12 +437,11 @@ export default function VehicleDetails() {
                                     </div>
                                 ))
                             )}
-                            
-                            {/* Option to add MORE photos later if needed */}
+                            {/* Add More Button (Camera Enabled) */}
                             <label className="cursor-pointer w-24 h-24 flex flex-col items-center justify-center bg-white border-2 border-dashed border-gray-400 rounded-lg hover:bg-blue-50 transition-colors text-blue-600">
                                 <Plus className="w-6 h-6 mb-1"/>
                                 <span className="text-[10px] font-bold uppercase">Add More</span>
-                                <input type="file" accept="image/*" className="hidden" onChange={(e) => handleLogUpload(e, log.id)} disabled={uploading} />
+                                <input type="file" accept="image/*" capture="environment" className="hidden" onChange={(e) => handleLogUpload(e, log.id)} disabled={uploading} />
                             </label>
                         </div>
                     </div>
