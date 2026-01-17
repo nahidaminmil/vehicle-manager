@@ -7,12 +7,12 @@ import Link from 'next/link'
 export default function Dashboard() {
   const [vehicles, setVehicles] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
-  const [errorMsg, setErrorMsg] = useState('') // New Error display
+  const [errorMsg, setErrorMsg] = useState('') 
   const [filter, setFilter] = useState('')
 
   useEffect(() => {
     async function fetchVehicles() {
-      // FIX: Read from the View instead of the Table
+      // 1. Read from the View
       const { data, error } = await supabase
         .from('vehicle_dashboard_view')
         .select('*')
@@ -65,7 +65,7 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* ERROR MESSAGE DISPLAY (If any) */}
+      {/* ERROR MESSAGE DISPLAY */}
       {errorMsg && (
         <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative mb-4 font-bold">
           System Error: {errorMsg}
@@ -113,7 +113,6 @@ export default function Dashboard() {
                     {vehicle.vehicle_uid}
                   </td>
                   <td className="px-6 py-4 font-bold text-gray-800 whitespace-nowrap">
-                    {/* The View names it 'vehicle_type_name' now */}
                     {vehicle.vehicle_type_name || '---'}
                   </td>
                   <td className="px-6 py-4 font-bold text-gray-800 whitespace-nowrap">
@@ -151,6 +150,23 @@ export default function Dashboard() {
       <Link href="/add-vehicle" className="fixed bottom-6 right-6 bg-blue-600 hover:bg-blue-700 text-white p-4 rounded-full shadow-2xl transition-transform hover:scale-110 flex items-center justify-center z-50">
         <Plus className="w-8 h-8" />
       </Link>
+    </div>
+  )
+}
+
+// --------------------------------------------------------
+// THE MISSING PART: This is what caused your error!
+// --------------------------------------------------------
+function StatCard({ title, value, icon, color }: any) {
+  return (
+    <div className={`${color} rounded-lg shadow-lg p-5 text-white flex items-center justify-between`}>
+      <div>
+        <p className="text-sm font-medium opacity-90 uppercase">{title}</p>
+        <p className="text-3xl font-black mt-1">{value}</p>
+      </div>
+      <div className="p-3 bg-white/20 rounded-full">
+        {icon}
+      </div>
     </div>
   )
 }
