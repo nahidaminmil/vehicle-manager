@@ -4,7 +4,7 @@ import { supabase } from '@/lib/supabase'
 import { useRouter } from 'next/navigation'
 import { 
   ArrowLeft, UserPlus, Shield, Trash2, User, Truck, MapPin, 
-  Edit, X, Loader2, Save 
+  Edit, X, Loader2, Save, LogOut 
 } from 'lucide-react'
 
 export default function UserManagementPage() {
@@ -41,14 +41,16 @@ export default function UserManagementPage() {
   // 1. FETCH DATA
   useEffect(() => {
     async function init() {
-      // Security Check
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) return router.push('/login')
 
       const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single()
+      
+      // Strict Security Check
       if (profile?.role !== 'super_admin') {
-        alert('Access Denied: Super Admin Only')
-        return router.push('/')
+        // If we just created a user, we might be logged in as them.
+        // We shouldn't alert 'Access Denied', we should just redirect to login.
+        return router.push('/login')
       }
 
       fetchUsers()
@@ -68,12 +70,12 @@ export default function UserManagementPage() {
     setVehicles(data || [])
   }
 
- // 2. CREATE USER (Updated Robust Version)
+  // 2. CREATE USER (Fixed Logic)
   async function handleCreateUser() {
     if (!newEmail || !newPassword) return alert('Email and Password required')
     setCreating(true)
 
-    // A. Create the Auth User (This creates the login credentials)
+    // A. Sign Up (This switches session to the NEW user)
     const { data: authData, error: authError } = await supabase.auth.signUp({
       email: newEmail,
       password: newPassword
@@ -86,11 +88,11 @@ export default function UserManagementPage() {
     }
 
     if (authData.user) {
-        // B. Manually Save the Profile Data
-        // We use .upsert() here. This guarantees the row is created even if the 
-        // database trigger failed or was too slow.
+        // B. Save Profile Data
+        // Since session switched, we are now the NEW user updating OUR OWN profile.
+        // This requires the RLS policy "Allow Users Update Own Profile" we added.
         const profileData = {
-            id: authData.user.id,  // IMPORTANT: Link to the new Auth ID
+            id: authData.user.id,
             email: newEmail,
             role: newRole,
             assigned_tob: newRole === 'tob_admin' ? newTob : null,
@@ -103,12 +105,14 @@ export default function UserManagementPage() {
         
         if (profileError) {
             console.error('Profile Error:', profileError)
-            alert('User Auth created, but Profile failed: ' + profileError.message)
+            alert('User created, but profile setup failed: ' + profileError.message)
         } else {
-            alert('User Created Successfully!')
-            fetchUsers() // Refresh the list immediately
-            setNewEmail('')
-            setNewPassword('')
+            // C. Success & Session Cleanup
+            alert(`User '${newEmail}' created successfully!\n\nNOTE: The system has signed you in as this new user.\nYou will now be logged out so you can sign back in as Admin.`)
+            
+            // Log out the new user immediately
+            await supabase.auth.signOut()
+            router.push('/login')
         }
     }
     setCreating(false)
