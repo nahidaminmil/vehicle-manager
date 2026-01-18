@@ -76,7 +76,7 @@ export default function Dashboard() {
   if (loading) return <div className="min-h-screen flex items-center justify-center bg-gray-100"><div className="text-xl font-black text-gray-900">Verifying Security Clearance...</div></div>
 
   return (
-    <div className="min-h-screen bg-gray-100 p-4 md:p-8 pb-24"> {/* Added pb-24 for floating button space */}
+    <div className="min-h-screen bg-gray-100 p-4 md:p-8 pb-24">
       
       {/* Top Bar */}
       <div className="flex flex-col md:flex-row justify-between items-center mb-6 gap-4">
@@ -93,7 +93,7 @@ export default function Dashboard() {
           </div>
         </div>
         
-        {/* Navigation Buttons (Scrollable on mobile if needed) */}
+        {/* Navigation Buttons */}
         <div className="flex flex-wrap gap-2 w-full md:w-auto items-center justify-start md:justify-end">
            
            {/* WORKSHOP BUTTON */}
@@ -109,6 +109,11 @@ export default function Dashboard() {
                     <Users className="w-4 h-4 md:w-5 md:h-5 mr-2" /> Users
                 </Link>
            )}
+
+           {/* ALL VEHICLES BUTTON (Restored!) */}
+           <Link href="/all-vehicles" className="flex-1 md:flex-none flex items-center justify-center bg-gray-800 hover:bg-black text-white px-3 py-2 md:px-4 md:py-3 rounded-lg font-bold shadow-sm text-sm transition-colors">
+             <Grid className="w-4 h-4 md:w-5 md:h-5 mr-2" /> All Vehicles
+           </Link>
 
            <Link href="/analytics" className="flex-1 md:flex-none flex items-center justify-center bg-purple-700 hover:bg-purple-800 text-white px-3 py-2 md:px-4 md:py-3 rounded-lg font-bold shadow-sm text-sm transition-colors">
              <BarChart3 className="w-4 h-4 md:w-5 md:h-5 mr-2" /> Analytics
@@ -127,7 +132,7 @@ export default function Dashboard() {
         </div>
       )}
 
-      {/* STATS CARDS (Grid 2x2 on Mobile, 1x4 on Desktop) */}
+      {/* STATS CARDS */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4 mb-6 md:mb-8">
         <StatCard title="Total Fleet" value={stats.total} icon={<Car className="w-5 h-5 md:w-6 md:h-6"/>} color="bg-blue-600" />
         <StatCard title="Mission Ready" value={stats.active} icon={<CheckCircle className="w-5 h-5 md:w-6 md:h-6"/>} color="bg-green-600" />
@@ -135,20 +140,20 @@ export default function Dashboard() {
         <StatCard title="Critical" value={stats.critical} icon={<AlertTriangle className="w-5 h-5 md:w-6 md:h-6"/>} color="bg-orange-600" />
       </div>
 
-      {/* SEARCH BAR (Large Text for Mobile) */}
+      {/* SEARCH BAR */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 mb-4 md:mb-0">
         <div className="p-4 md:p-5 flex items-center">
           <Search className="w-5 h-5 text-gray-500 mr-3" />
           <input 
             type="text" 
             placeholder="Search Vehicle ID..." 
-            className="w-full bg-transparent outline-none text-gray-900 font-bold placeholder-gray-400 text-base" // text-base prevents iOS zoom
+            className="w-full bg-transparent outline-none text-gray-900 font-bold placeholder-gray-400 text-base" 
             onChange={(e) => setFilter(e.target.value)}
           />
         </div>
       </div>
 
-      {/* --- DESKTOP VIEW: TABLE (Hidden on Mobile) --- */}
+      {/* --- DESKTOP VIEW: TABLE --- */}
       <div className="hidden md:block bg-white rounded-b-xl shadow-lg border-t-0 border border-gray-200 overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse">
@@ -186,7 +191,7 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* --- MOBILE VIEW: CARDS (Hidden on Desktop) --- */}
+      {/* --- MOBILE VIEW: CARDS --- */}
       <div className="md:hidden mt-4 space-y-3">
          {filteredVehicles.map((vehicle: any) => (
             <div key={vehicle.id} className="bg-white p-4 rounded-lg shadow-sm border border-gray-200 flex flex-col gap-3">
@@ -210,12 +215,9 @@ export default function Dashboard() {
                 </Link>
             </div>
          ))}
-         {filteredVehicles.length === 0 && (
-             <div className="text-center p-8 text-gray-400 font-bold">No vehicles found.</div>
-         )}
       </div>
       
-      {/* FLOATING ADD BUTTON (Mobile Optimized) */}
+      {/* FLOATING ADD BUTTON */}
       <Link href="/add-vehicle" className="fixed bottom-6 right-6 bg-blue-600 hover:bg-blue-700 text-white w-14 h-14 rounded-full shadow-2xl transition-transform active:scale-95 flex items-center justify-center z-50">
         <Plus className="w-8 h-8" />
       </Link>
