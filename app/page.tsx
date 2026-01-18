@@ -2,7 +2,7 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase'
 import { useRouter } from 'next/navigation'
-import { Car, CheckCircle, XCircle, AlertTriangle, Plus, Search, BarChart3, Grid, LogOut, Users, Wrench, MapPin, Activity } from 'lucide-react'
+import { Car, CheckCircle, XCircle, AlertTriangle, Plus, Search, BarChart3, Grid, LogOut, Users, Wrench, MapPin } from 'lucide-react'
 import Link from 'next/link'
 
 export default function Dashboard() {
@@ -26,7 +26,6 @@ export default function Dashboard() {
         .single()
 
       if (profile) {
-          console.log("User Role Found:", profile.role)
           setRole(profile.role)
       } else {
           console.error("Profile Fetch Error:", profileError)
@@ -61,11 +60,8 @@ export default function Dashboard() {
   // --- STATS LOGIC ---
   function calculateStats(data: any[]) {
     const total = data.length
-    // Active means "Active" in the database status column
     const active = data.filter(v => v.status === 'Active').length
-    // Inactive specifically tracks the "Inactive" status
     const inactive = data.filter(v => v.status === 'Inactive').length
-    // Critical tracks serious issues (NMC or Inactive)
     const critical = data.filter(v => v.operational_category === 'Non-Mission Capable' || v.status === 'Inactive').length
     return { total, active, inactive, critical }
   }
@@ -91,13 +87,6 @@ export default function Dashboard() {
       return 'bg-red-100 text-red-800'
   }
 
-  const getOpCatShort = (c: string) => {
-      if (c === 'Fully Mission Capable') return 'FMC'
-      if (c === 'Degraded') return 'Degraded'
-      if (c === 'Non-Mission Capable') return 'NMC'
-      return c
-  }
-
   if (loading) return <div className="min-h-screen flex items-center justify-center bg-gray-100"><div className="text-xl font-black text-gray-900">Verifying Security Clearance...</div></div>
 
   return (
@@ -120,21 +109,18 @@ export default function Dashboard() {
         {/* Navigation Buttons */}
         <div className="flex flex-wrap gap-2 w-full md:w-auto items-center justify-start md:justify-end">
            
-           {/* WORKSHOP BUTTON */}
            {(role === 'super_admin' || role === 'admin' || role === 'tob_admin' || role === 'workshop_admin') && (
                <Link href="/workshop" className="flex-1 md:flex-none flex items-center justify-center bg-orange-600 hover:bg-orange-700 text-white px-3 py-2 md:px-4 md:py-3 rounded-lg font-bold shadow-sm text-sm transition-colors">
                   <Wrench className="w-4 h-4 md:w-5 md:h-5 mr-2" /> Workshop
                </Link>
            )}
 
-           {/* USERS BUTTON */}
            {role === 'super_admin' && (
                 <Link href="/users" className="flex-1 md:flex-none flex items-center justify-center bg-purple-900 hover:bg-black text-white px-3 py-2 md:px-4 md:py-3 rounded-lg font-bold shadow-sm text-sm transition-colors">
                     <Users className="w-4 h-4 md:w-5 md:h-5 mr-2" /> Users
                 </Link>
            )}
 
-           {/* ALL VEHICLES BUTTON */}
            <Link href="/all-vehicles" className="flex-1 md:flex-none flex items-center justify-center bg-gray-800 hover:bg-black text-white px-3 py-2 md:px-4 md:py-3 rounded-lg font-bold shadow-sm text-sm transition-colors">
              <Grid className="w-4 h-4 md:w-5 md:h-5 mr-2" /> All Vehicles
            </Link>
@@ -187,9 +173,9 @@ export default function Dashboard() {
                 <th className="px-6 py-4 border-b border-gray-100">Type</th>
                 <th className="px-6 py-4 border-b border-gray-100">Location (TOB)</th>
                 
-                {/* NEW SPLIT HEADERS */}
+                {/* NEW HEADERS */}
                 <th className="px-6 py-4 border-b border-gray-100">Vehicle Status</th>
-                <th className="px-6 py-4 border-b border-gray-100">Op. Category</th>
+                <th className="px-6 py-4 border-b border-gray-100">OPERATIONAL CATEGORY</th>
                 
                 <th className="px-6 py-4 border-b border-gray-100 text-right">Action</th>
               </tr>
@@ -210,10 +196,10 @@ export default function Dashboard() {
                     </span>
                   </td>
 
-                  {/* OP CATEGORY BADGE */}
+                  {/* OP CATEGORY BADGE (UPDATED: UPPERCASE) */}
                   <td className="px-6 py-4 whitespace-nowrap">
                     <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold uppercase tracking-wide ${getOpCatColor(vehicle.operational_category)}`}>
-                      {getOpCatShort(vehicle.operational_category)}
+                      {vehicle.operational_category}
                     </span>
                   </td>
 
@@ -243,8 +229,9 @@ export default function Dashboard() {
                         <span className={`px-2 py-0.5 rounded text-[10px] font-black uppercase ${getStatusColor(vehicle.status)}`}>
                             {vehicle.status}
                         </span>
+                        {/* Updated to Uppercase */}
                         <span className={`px-2 py-0.5 rounded text-[10px] font-black uppercase ${getOpCatColor(vehicle.operational_category)}`}>
-                            {getOpCatShort(vehicle.operational_category)}
+                            {vehicle.operational_category}
                         </span>
                     </div>
                 </div>
