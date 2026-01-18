@@ -1,11 +1,11 @@
 "use client"
 import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase'
-import { adminCreateUser, adminResetPassword } from '@/app/actions' // Import Server Actions
+import { adminCreateUser, adminResetPassword } from '@/app/actions'
 import { useRouter } from 'next/navigation'
 import { 
   ArrowLeft, UserPlus, Shield, Trash2, User, Truck, MapPin, 
-  Edit, X, Loader2, Save, Key 
+  Edit, X, Loader2, Save, Key, Search 
 } from 'lucide-react'
 
 export default function UserManagementPage() {
@@ -25,12 +25,15 @@ export default function UserManagementPage() {
   const [newVehicleId, setNewVehicleId] = useState('')
   const [creating, setCreating] = useState(false)
 
+  // --- SEARCH STATE (New!) ---
+  const [searchTerm, setSearchTerm] = useState('')
+
   // --- LISTS ---
   const tobList = ['NDROMO', 'BAYOO', 'RHOO', 'DRODRO']
   const roles = [
     { val: 'super_admin', label: '👑 Super Admin' },
     { val: 'admin', label: '👮‍♂️ Admin Officer' },
-    { val: 'workshop_admin', label: '🔧 Workshop Admin' }, // <-- NEW ROLE ADDED
+    { val: 'workshop_admin', label: '🔧 Workshop Admin' },
     { val: 'tob_admin', label: '🏰 TOB Commander' },
     { val: 'vehicle_user', label: '🚙 Vehicle User' }
   ]
@@ -61,12 +64,11 @@ export default function UserManagementPage() {
     setVehicles(data || [])
   }
 
-  // 2. CREATE USER (Via Server Action - NO LOGOUT)
+  // 2. CREATE USER
   async function handleCreateUser() {
     if (!newEmail || !newPassword) return alert('Email and Password required')
     setCreating(true)
 
-    // Prepare data
     const formData = {
         email: newEmail,
         password: newPassword,
@@ -75,7 +77,6 @@ export default function UserManagementPage() {
         assigned_vehicle_id: newRole === 'vehicle_user' ? newVehicleId : null
     }
 
-    // Call Server Action
     const result = await adminCreateUser(formData)
 
     if (!result.success) {
@@ -84,15 +85,15 @@ export default function UserManagementPage() {
         alert('User Created Successfully!')
         setNewEmail('')
         setNewPassword('')
-        fetchUsers() // Refresh list
+        fetchUsers()
     }
     setCreating(false)
   }
 
-  // 3. RESET PASSWORD (Via Server Action)
+  // 3. RESET PASSWORD
   async function handleResetPassword(userId: string, userEmail: string) {
       const newPass = prompt(`Enter new password for ${userEmail}:`)
-      if (!newPass) return // Cancelled
+      if (!newPass) return 
 
       if (newPass.length < 6) return alert("Password must be at least 6 characters")
 
@@ -105,7 +106,7 @@ export default function UserManagementPage() {
       }
   }
 
-  // 4. EDIT ROLE (Local)
+  // 4. EDIT ROLE
   function startEditing(user: any) {
     setEditingId(user.id)
     setEditForm({
@@ -133,6 +134,19 @@ export default function UserManagementPage() {
       if (error) alert(error.message)
       else fetchUsers()
   }
+
+  // --- FILTERING LOGIC ---
+  const filteredUsers = users.filter(user => {
+    const search = searchTerm.toLowerCase()
+    const vehicleUid = vehicles.find(v => v.id === user.assigned_vehicle_id)?.vehicle_uid || ''
+    
+    return (
+        user.email?.toLowerCase().includes(search) ||
+        user.role?.toLowerCase().includes(search) ||
+        user.assigned_tob?.toLowerCase().includes(search) ||
+        vehicleUid.toLowerCase().includes(search)
+    )
+  })
 
   if (loading) return <div className="p-8 font-bold text-xl">Loading User Database...</div>
 
@@ -191,66 +205,91 @@ export default function UserManagementPage() {
             </div>
         </div>
 
-        {/* LIST */}
+        {/* LIST SECTION */}
         <div className="lg:col-span-2 space-y-4">
-            {users.map((u) => (
-                <div key={u.id} className={`bg-white p-4 rounded-lg shadow-sm border border-gray-200 flex flex-col md:flex-row justify-between items-center transition-all ${editingId === u.id ? 'ring-2 ring-blue-500 bg-blue-50' : ''}`}>
-                    <div className="flex items-center gap-4 mb-4 md:mb-0 w-full">
-                        <div className={`p-3 rounded-full flex-shrink-0 ${u.role === 'super_admin' ? 'bg-purple-100 text-purple-700' : u.role === 'admin' ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-600'}`}>
-                            {u.role === 'super_admin' ? <Shield className="w-6 h-6"/> : u.role === 'vehicle_user' ? <Truck className="w-6 h-6"/> : <User className="w-6 h-6"/>}
+            
+            {/* SEARCH BAR (New!) */}
+            <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-200 flex items-center mb-4">
+                <Search className="w-5 h-5 text-gray-400 mr-3" />
+                <input 
+                    type="text" 
+                    placeholder="Search by Email, Role, TOB, or Vehicle ID..." 
+                    className="w-full outline-none font-bold text-gray-700"
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                />
+                {searchTerm && (
+                    <button onClick={() => setSearchTerm('')} className="text-gray-400 hover:text-red-500">
+                        <X className="w-5 h-5" />
+                    </button>
+                )}
+            </div>
+
+            {/* USER LIST */}
+            {filteredUsers.length === 0 ? (
+                <div className="text-center p-8 text-gray-400 font-bold bg-white rounded-xl border border-gray-200">
+                    No users found matching "{searchTerm}"
+                </div>
+            ) : (
+                filteredUsers.map((u) => (
+                    <div key={u.id} className={`bg-white p-4 rounded-lg shadow-sm border border-gray-200 flex flex-col md:flex-row justify-between items-center transition-all ${editingId === u.id ? 'ring-2 ring-blue-500 bg-blue-50' : ''}`}>
+                        <div className="flex items-center gap-4 mb-4 md:mb-0 w-full">
+                            <div className={`p-3 rounded-full flex-shrink-0 ${u.role === 'super_admin' ? 'bg-purple-100 text-purple-700' : u.role === 'admin' ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-600'}`}>
+                                {u.role === 'super_admin' ? <Shield className="w-6 h-6"/> : u.role === 'vehicle_user' ? <Truck className="w-6 h-6"/> : <User className="w-6 h-6"/>}
+                            </div>
+                            <div className="w-full">
+                                <p className="font-bold text-gray-900 text-lg">{u.email}</p>
+                                {editingId === u.id ? (
+                                    <div className="mt-2 grid grid-cols-1 md:grid-cols-2 gap-2 animate-in fade-in slide-in-from-top-2">
+                                        <select value={editForm.role} onChange={e => setEditForm({...editForm, role: e.target.value})} className="p-1 border rounded text-sm font-bold">
+                                            {roles.map(r => <option key={r.val} value={r.val}>{r.label}</option>)}
+                                        </select>
+                                        {editForm.role === 'tob_admin' && (
+                                            <select value={editForm.tob} onChange={e => setEditForm({...editForm, tob: e.target.value})} className="p-1 border rounded text-sm font-bold text-blue-700">
+                                                {tobList.map(t => <option key={t} value={t}>{t}</option>)}
+                                            </select>
+                                        )}
+                                        {editForm.role === 'vehicle_user' && (
+                                            <select value={editForm.vehicle_id} onChange={e => setEditForm({...editForm, vehicle_id: e.target.value})} className="p-1 border rounded text-sm font-bold text-orange-700">
+                                                <option value="">Select Vehicle...</option>
+                                                {vehicles.map(v => <option key={v.id} value={v.id}>{v.vehicle_uid}</option>)}
+                                            </select>
+                                        )}
+                                    </div>
+                                ) : (
+                                    <p className="text-xs font-bold text-gray-500 uppercase flex items-center gap-2 mt-1">
+                                        <span className="bg-gray-100 px-2 py-0.5 rounded">{u.role.replace('_', ' ')}</span>
+                                        {u.assigned_tob && <span className="text-blue-600 flex items-center bg-blue-50 px-2 py-0.5 rounded"><MapPin className="w-3 h-3 mr-1"/> {u.assigned_tob}</span>}
+                                        {u.assigned_vehicle_id && <span className="text-orange-600 flex items-center bg-orange-50 px-2 py-0.5 rounded"><Truck className="w-3 h-3 mr-1"/> {vehicles.find(v=>v.id===u.assigned_vehicle_id)?.vehicle_uid || 'Linked'}</span>}
+                                    </p>
+                                )}
+                            </div>
                         </div>
-                        <div className="w-full">
-                            <p className="font-bold text-gray-900 text-lg">{u.email}</p>
+                        <div className="flex gap-2 min-w-fit">
                             {editingId === u.id ? (
-                                <div className="mt-2 grid grid-cols-1 md:grid-cols-2 gap-2 animate-in fade-in slide-in-from-top-2">
-                                    <select value={editForm.role} onChange={e => setEditForm({...editForm, role: e.target.value})} className="p-1 border rounded text-sm font-bold">
-                                        {roles.map(r => <option key={r.val} value={r.val}>{r.label}</option>)}
-                                    </select>
-                                    {editForm.role === 'tob_admin' && (
-                                        <select value={editForm.tob} onChange={e => setEditForm({...editForm, tob: e.target.value})} className="p-1 border rounded text-sm font-bold text-blue-700">
-                                            {tobList.map(t => <option key={t} value={t}>{t}</option>)}
-                                        </select>
-                                    )}
-                                    {editForm.role === 'vehicle_user' && (
-                                        <select value={editForm.vehicle_id} onChange={e => setEditForm({...editForm, vehicle_id: e.target.value})} className="p-1 border rounded text-sm font-bold text-orange-700">
-                                            <option value="">Select Vehicle...</option>
-                                            {vehicles.map(v => <option key={v.id} value={v.id}>{v.vehicle_uid}</option>)}
-                                        </select>
-                                    )}
-                                </div>
+                                <>
+                                    <button onClick={() => setEditingId(null)} className="flex items-center px-3 py-2 bg-gray-200 hover:bg-gray-300 rounded font-bold text-sm text-gray-700"><X className="w-4 h-4 mr-1"/> Cancel</button>
+                                    <button onClick={saveChanges} className="flex items-center px-3 py-2 bg-green-600 hover:bg-green-700 rounded font-bold text-sm text-white"><Save className="w-4 h-4 mr-1"/> Save</button>
+                                </>
                             ) : (
-                                <p className="text-xs font-bold text-gray-500 uppercase flex items-center gap-2 mt-1">
-                                    <span className="bg-gray-100 px-2 py-0.5 rounded">{u.role.replace('_', ' ')}</span>
-                                    {u.assigned_tob && <span className="text-blue-600 flex items-center bg-blue-50 px-2 py-0.5 rounded"><MapPin className="w-3 h-3 mr-1"/> {u.assigned_tob}</span>}
-                                    {u.assigned_vehicle_id && <span className="text-orange-600 flex items-center bg-orange-50 px-2 py-0.5 rounded"><Truck className="w-3 h-3 mr-1"/> {vehicles.find(v=>v.id===u.assigned_vehicle_id)?.vehicle_uid || 'Linked'}</span>}
-                                </p>
+                                <>
+                                    <button onClick={() => handleResetPassword(u.id, u.email)} className="flex items-center px-3 py-2 bg-yellow-50 hover:bg-yellow-100 rounded font-bold text-sm text-yellow-700 border border-yellow-200" title="Change Password">
+                                        <Key className="w-4 h-4 mr-1"/> Reset Pass
+                                    </button>
+                                    <button onClick={() => startEditing(u)} className="flex items-center px-3 py-2 bg-blue-50 hover:bg-blue-100 rounded font-bold text-sm text-blue-700 border border-blue-200">
+                                        <Edit className="w-4 h-4 mr-1"/> Edit Role
+                                    </button>
+                                    {u.role !== 'super_admin' && (
+                                        <button onClick={() => handleDelete(u.id)} className="flex items-center px-3 py-2 bg-red-50 hover:bg-red-100 rounded font-bold text-sm text-red-600 border border-red-200">
+                                            <Trash2 className="w-4 h-4 mr-1"/> Delete
+                                        </button>
+                                    )}
+                                </>
                             )}
                         </div>
                     </div>
-                    <div className="flex gap-2 min-w-fit">
-                        {editingId === u.id ? (
-                            <>
-                                <button onClick={() => setEditingId(null)} className="flex items-center px-3 py-2 bg-gray-200 hover:bg-gray-300 rounded font-bold text-sm text-gray-700"><X className="w-4 h-4 mr-1"/> Cancel</button>
-                                <button onClick={saveChanges} className="flex items-center px-3 py-2 bg-green-600 hover:bg-green-700 rounded font-bold text-sm text-white"><Save className="w-4 h-4 mr-1"/> Save</button>
-                            </>
-                        ) : (
-                            <>
-                                <button onClick={() => handleResetPassword(u.id, u.email)} className="flex items-center px-3 py-2 bg-yellow-50 hover:bg-yellow-100 rounded font-bold text-sm text-yellow-700 border border-yellow-200" title="Change Password">
-                                    <Key className="w-4 h-4 mr-1"/> Reset Pass
-                                </button>
-                                <button onClick={() => startEditing(u)} className="flex items-center px-3 py-2 bg-blue-50 hover:bg-blue-100 rounded font-bold text-sm text-blue-700 border border-blue-200">
-                                    <Edit className="w-4 h-4 mr-1"/> Edit Role
-                                </button>
-                                {u.role !== 'super_admin' && (
-                                    <button onClick={() => handleDelete(u.id)} className="flex items-center px-3 py-2 bg-red-50 hover:bg-red-100 rounded font-bold text-sm text-red-600 border border-red-200">
-                                        <Trash2 className="w-4 h-4 mr-1"/> Delete
-                                    </button>
-                                )}
-                            </>
-                        )}
-                    </div>
-                </div>
-            ))}
+                ))
+            )}
         </div>
       </div>
     </div>
