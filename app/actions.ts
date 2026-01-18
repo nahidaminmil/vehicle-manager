@@ -86,7 +86,7 @@ export async function adminResetPassword(userId: string, newPassword: string) {
   }
 }
 
-// --- AUTOMATED VEHICLE + USER CREATION ---
+// 4. SERVER ACTION: Automated Vehicle + User Creation
 export async function createVehicleWithAutoUser(formData: any) {
   const { 
     vehicle_uid, 
@@ -97,13 +97,11 @@ export async function createVehicleWithAutoUser(formData: any) {
   } = formData
 
   // 1. Generate Robot Credentials
-  // Email: un-1234@fleet.system
-  // Pass: random 8-character string
   const cleanUid = vehicle_uid.replace(/[^a-zA-Z0-9]/g, '').toLowerCase()
   const email = `${cleanUid}@fleet.system`
-  const password = Math.random().toString(36).slice(-8) + "Aa1!" // Strong-ish password
+  const password = Math.random().toString(36).slice(-8) + "Aa1!" 
 
-  // 2. Create the Auth User (Supabase Auth)
+  // 2. Create the Auth User
   const { data: authData, error: authError } = await supabaseAdmin.auth.admin.createUser({
     email: email,
     password: password,
@@ -113,7 +111,7 @@ export async function createVehicleWithAutoUser(formData: any) {
 
   if (authError) return { success: false, error: "User Creation Failed: " + authError.message }
 
-  // 3. Create the Vehicle Entry (With Credentials stored)
+  // 3. Create the Vehicle Entry
   const { data: vehicleData, error: vehicleError } = await supabaseAdmin
     .from('vehicles')
     .insert({
@@ -130,22 +128,38 @@ export async function createVehicleWithAutoUser(formData: any) {
     .single()
 
   if (vehicleError) {
-      // Cleanup: If vehicle failed, delete the user we just made to keep things clean
+      // Cleanup: If vehicle failed, delete the user we just made
       await supabaseAdmin.auth.admin.deleteUser(authData.user.id)
       return { success: false, error: "Vehicle DB Error: " + vehicleError.message }
   }
 
-  // 4. Link User to Profile (The "Handshake")
+  // 4. Link User to Profile
   const { error: profileError } = await supabaseAdmin
     .from('profiles')
     .upsert({
       id: authData.user.id,
       email: email,
       role: 'vehicle_user',
-      assigned_vehicle_id: vehicleData.id // <--- CRITICAL LINK
+      assigned_vehicle_id: vehicleData.id
     })
 
   if (profileError) return { success: false, error: "Profile Link Error: " + profileError.message }
+
+  return { success: true }
+}
+
+// 5. SERVER ACTION: Delete Vehicle (Super Admin)
+export async function deleteVehicle(vehicleId: string) {
+  // We use supabaseAdmin to bypass checks and force delete
+  // (The UI will ensure only Super Admin sees the button)
+  
+  // 1. Delete the Vehicle (Cascade will handle logs/profile links)
+  const { error } = await supabaseAdmin
+    .from('vehicles')
+    .delete()
+    .eq('id', vehicleId)
+
+  if (error) return { success: false, error: error.message }
 
   return { success: true }
 }
