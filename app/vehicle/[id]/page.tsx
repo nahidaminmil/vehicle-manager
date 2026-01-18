@@ -2,8 +2,8 @@
 import { useEffect, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
-import { deleteVehicle } from '@/app/actions' // <--- Import the new Delete Action
-import QRCode from "react-qr-code" // <--- Import QR Library
+import { deleteVehicle } from '@/app/actions' 
+import QRCode from "react-qr-code" 
 import { 
   ArrowLeft, CheckCircle, AlertTriangle, Camera, Wrench, 
   CheckSquare, Clock, Edit2, X, Save, Trash2, Plus, 
@@ -21,7 +21,7 @@ export default function VehicleDetails() {
   const [evidence, setEvidence] = useState<any>({}) 
   const [types, setTypes] = useState<any[]>([])     
   const [loading, setLoading] = useState(true)
-  const [userRole, setUserRole] = useState('') // <--- To check for Super Admin
+  const [userRole, setUserRole] = useState('') 
   
   // --- QR MODAL ---
   const [showQr, setShowQr] = useState(false)
@@ -29,7 +29,13 @@ export default function VehicleDetails() {
   // --- EDIT PROFILE STATE ---
   const [isEditing, setIsEditing] = useState(false)
   const [editFormData, setEditFormData] = useState({
-    vehicle_uid: '', tob: '', vehicle_type_id: '', mileage: 0, operational_category: '', status: ''
+    vehicle_uid: '', 
+    tob: '', 
+    vehicle_type_id: '', 
+    mileage: 0, 
+    operational_category: '', 
+    status: '',
+    description: '' // <--- NEW FIELD ADDED HERE
   })
 
   // --- LOG FORM STATE ---
@@ -42,7 +48,7 @@ export default function VehicleDetails() {
   const [priority, setPriority] = useState('Routine')
   const [logFile, setLogFile] = useState<File | null>(null)
   
-  // Maintenance Details Fields (Renamed from Officer Section)
+  // Maintenance Details Fields
   const [actionReq, setActionReq] = useState('')
   const [responsible, setResponsible] = useState('')
   const [estDays, setEstDays] = useState('')
@@ -64,12 +70,11 @@ export default function VehicleDetails() {
         if(profile) setUserRole(profile.role)
     }
 
-    // 2. Get Vehicle + Secret Credentials (for QR)
-    // We fetch from raw 'vehicles' table to get auto_email/pass
+    // 2. Get Vehicle + Secret Credentials
     const { data: vehicleRaw } = await supabase.from('vehicles').select('*').eq('id', id).single()
     const { data: vehicleView } = await supabase.from('vehicle_dashboard_view').select('*').eq('id', id).single()
     
-    // Merge view data (pretty names) with raw data (secrets)
+    // Merge view data with raw data
     const vehicleData = { ...vehicleView, ...vehicleRaw }
 
     const { data: typesData } = await supabase.from('vehicle_types').select('*')
@@ -100,7 +105,8 @@ export default function VehicleDetails() {
         vehicle_type_id: vehicleData.vehicle_type_id || '', 
         mileage: vehicleData.mileage || 0,
         operational_category: vehicleData.operational_category || 'Fully Mission Capable',
-        status: vehicleData.status || 'Active'
+        status: vehicleData.status || 'Active',
+        description: vehicleData.description || '' // <--- LOAD EXISTING DESCRIPTION
       })
 
       if (vehicleData.inactive_since) {
@@ -171,7 +177,8 @@ export default function VehicleDetails() {
         vehicle_type_id: editFormData.vehicle_type_id,
         mileage: editFormData.mileage,
         operational_category: editFormData.operational_category,
-        status: editFormData.status
+        status: editFormData.status,
+        description: editFormData.description // <--- SAVE DESCRIPTION
       }).eq('id', vehicle.id)
     if(error) alert("Error saving: " + error.message)
     else { setIsEditing(false); fetchData() }
@@ -319,6 +326,17 @@ export default function VehicleDetails() {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div><label className="block text-xs font-extrabold text-gray-500 uppercase tracking-wider mb-1">Vehicle ID</label>{isEditing ? <input type="text" value={editFormData.vehicle_uid} onChange={(e) => setEditFormData({...editFormData, vehicle_uid: e.target.value})} className="w-full p-2 border-2 border-blue-200 rounded font-bold"/> : <p className="text-lg font-black text-gray-900">{vehicle.vehicle_uid}</p>}</div>
             <div><label className="block text-xs font-extrabold text-gray-500 uppercase tracking-wider mb-1">Location (TOB)</label>{isEditing ? <select value={editFormData.tob} onChange={(e) => setEditFormData({...editFormData, tob: e.target.value})} className="w-full p-2 border-2 border-blue-200 rounded font-bold">{tobList.map(t => <option key={t} value={t}>{t}</option>)}</select> : <p className="text-lg font-bold text-gray-900">{vehicle.tob}</p>}</div>
+            
+            {/* NEW DESCRIPTION FIELD */}
+            <div className="md:col-span-2">
+                <label className="block text-xs font-extrabold text-gray-500 uppercase tracking-wider mb-1">Description / Spec</label>
+                {isEditing ? (
+                    <input type="text" value={editFormData.description} onChange={(e) => setEditFormData({...editFormData, description: e.target.value})} className="w-full p-2 border-2 border-blue-200 rounded font-bold" placeholder="e.g. 4x4, Winch, Radio Equipped" />
+                ) : (
+                    <p className="text-lg font-bold text-gray-900">{vehicle.description || '---'}</p>
+                )}
+            </div>
+
             <div><label className="block text-xs font-extrabold text-gray-500 uppercase tracking-wider mb-1">Type</label>{isEditing ? <select value={editFormData.vehicle_type_id} onChange={(e) => setEditFormData({...editFormData, vehicle_type_id: e.target.value})} className="w-full p-2 border-2 border-blue-200 rounded font-bold">{types.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}</select> : <p className="text-lg font-bold text-gray-900">{vehicle.vehicle_type_name}</p>}</div>
             <div><label className="block text-xs font-extrabold text-gray-500 uppercase tracking-wider mb-1">Mileage</label>{isEditing ? <input type="number" value={editFormData.mileage} onChange={(e) => setEditFormData({...editFormData, mileage: Number(e.target.value)})} className="w-full p-2 border-2 border-blue-200 rounded font-bold"/> : <p className="text-lg font-bold text-gray-900">{vehicle.mileage} km</p>}</div>
             
