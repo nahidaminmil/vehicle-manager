@@ -1,10 +1,11 @@
 "use client"
 import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase'
+import { adminCreateUser, adminResetPassword } from '@/app/actions' // Import Server Actions
 import { useRouter } from 'next/navigation'
 import { 
   ArrowLeft, UserPlus, Shield, Trash2, User, Truck, MapPin, 
-  Edit, X, Loader2, Save, LogOut 
+  Edit, X, Loader2, Save, Key 
 } from 'lucide-react'
 
 export default function UserManagementPage() {
@@ -24,6 +25,7 @@ export default function UserManagementPage() {
   const [newVehicleId, setNewVehicleId] = useState('')
   const [creating, setCreating] = useState(false)
 
+  // --- LISTS ---
   const tobList = ['NDROMO', 'BAYOO', 'RHOO', 'DRODRO']
   const roles = [
     { val: 'super_admin', label: '👑 Super Admin' },
@@ -58,55 +60,51 @@ export default function UserManagementPage() {
     setVehicles(data || [])
   }
 
-  // 2. CREATE USER (SAFE METHOD)
+  // 2. CREATE USER (Via Server Action - NO LOGOUT)
   async function handleCreateUser() {
     if (!newEmail || !newPassword) return alert('Email and Password required')
     setCreating(true)
 
-    // A. Create Auth User (Switch Session)
-    const { data: authData, error: authError } = await supabase.auth.signUp({
-      email: newEmail,
-      password: newPassword,
-      options: { emailRedirectTo: undefined } // Prevent email sending
-    })
-
-    if (authError) {
-        alert('Error creating auth: ' + authError.message)
-        setCreating(false)
-        return
+    // Prepare data
+    const formData = {
+        email: newEmail,
+        password: newPassword,
+        role: newRole,
+        assigned_tob: newRole === 'tob_admin' ? newTob : null,
+        assigned_vehicle_id: newRole === 'vehicle_user' ? newVehicleId : null
     }
 
-    if (authData.user) {
-        // B. WAIT for Trigger
-        // We wait 1 second to let the Database Trigger create the profile row automatically.
-        // This PREVENTS the 'foreign key' error you were seeing.
-        await new Promise(resolve => setTimeout(resolve, 1000))
+    // Call Server Action
+    const result = await adminCreateUser(formData)
 
-        // C. UPDATE the auto-created profile
-        const updates: any = { 
-            role: newRole,
-            assigned_tob: newRole === 'tob_admin' ? newTob : null,
-            assigned_vehicle_id: newRole === 'vehicle_user' ? newVehicleId : null
-        }
-
-        const { error: profileError } = await supabase
-            .from('profiles')
-            .update(updates)
-            .eq('id', authData.user.id)
-        
-        if (profileError) {
-            console.error(profileError)
-            alert('User created, but role update failed. They are set to default "Vehicle User".')
-        } else {
-            alert(`User '${newEmail}' created successfully!\n\nSYSTEM NOTICE: You are now signed in as this new user.\nYou will be logged out automatically.`)
-            await supabase.auth.signOut()
-            router.push('/login')
-        }
+    if (!result.success) {
+        alert('Error: ' + result.error)
+    } else {
+        alert('User Created Successfully!')
+        setNewEmail('')
+        setNewPassword('')
+        fetchUsers() // Refresh list
     }
     setCreating(false)
   }
 
-  // 3. EDIT & SAVE & DELETE
+  // 3. RESET PASSWORD (Via Server Action)
+  async function handleResetPassword(userId: string, userEmail: string) {
+      const newPass = prompt(`Enter new password for ${userEmail}:`)
+      if (!newPass) return // Cancelled
+
+      if (newPass.length < 6) return alert("Password must be at least 6 characters")
+
+      const result = await adminResetPassword(userId, newPass)
+      
+      if (result.success) {
+          alert("Password updated successfully!")
+      } else {
+          alert("Error updating password: " + result.error)
+      }
+  }
+
+  // 4. EDIT ROLE (Local)
   function startEditing(user: any) {
     setEditingId(user.id)
     setEditForm({
@@ -236,9 +234,16 @@ export default function UserManagementPage() {
                             </>
                         ) : (
                             <>
-                                <button onClick={() => startEditing(u)} className="flex items-center px-3 py-2 bg-blue-50 hover:bg-blue-100 rounded font-bold text-sm text-blue-700 border border-blue-200"><Edit className="w-4 h-4 mr-1"/> Edit Role</button>
+                                <button onClick={() => handleResetPassword(u.id, u.email)} className="flex items-center px-3 py-2 bg-yellow-50 hover:bg-yellow-100 rounded font-bold text-sm text-yellow-700 border border-yellow-200" title="Change Password">
+                                    <Key className="w-4 h-4 mr-1"/> Reset Pass
+                                </button>
+                                <button onClick={() => startEditing(u)} className="flex items-center px-3 py-2 bg-blue-50 hover:bg-blue-100 rounded font-bold text-sm text-blue-700 border border-blue-200">
+                                    <Edit className="w-4 h-4 mr-1"/> Edit Role
+                                </button>
                                 {u.role !== 'super_admin' && (
-                                    <button onClick={() => handleDelete(u.id)} className="flex items-center px-3 py-2 bg-red-50 hover:bg-red-100 rounded font-bold text-sm text-red-600 border border-red-200"><Trash2 className="w-4 h-4 mr-1"/> Delete</button>
+                                    <button onClick={() => handleDelete(u.id)} className="flex items-center px-3 py-2 bg-red-50 hover:bg-red-100 rounded font-bold text-sm text-red-600 border border-red-200">
+                                        <Trash2 className="w-4 h-4 mr-1"/> Delete
+                                    </button>
                                 )}
                             </>
                         )}
