@@ -2,7 +2,7 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
-import { ArrowLeft, BarChart3, MapPin, Activity, Wrench } from 'lucide-react'
+import { ArrowLeft, BarChart3, MapPin } from 'lucide-react' // <--- FIXED: Added MapPin
 
 export default function AnalyticsPage() {
   const router = useRouter()
@@ -67,7 +67,6 @@ export default function AnalyticsPage() {
       else if (opCat === 'Non-Mission Capable') g.opCat.nmc++
 
       // --- TOB AGGREGATION ---
-      // Handle edge case if a new TOB appears that isn't in our list
       if (!g.tobs[tob]) {
           g.tobs[tob] = { 
             status: { active: 0, inactive: 0, maintenance: 0 },
@@ -111,22 +110,31 @@ export default function AnalyticsPage() {
           <div key={typeStat.name} className="bg-white rounded-xl shadow-lg border-t-8 border-blue-600 overflow-hidden">
             
             {/* CARD HEADER */}
-            <div className="p-5 bg-gray-50 border-b border-gray-200 flex flex-col sm:flex-row justify-between items-start sm:items-center">
+            <div className="p-5 bg-gray-50 border-b border-gray-200 flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4">
+              
+              {/* Title Section */}
               <div>
                   <h2 className="text-2xl font-black text-gray-900 uppercase">{typeStat.name}</h2>
                   <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">Total Fleet: {typeStat.total} units</span>
               </div>
               
-              {/* Global Summary Badge */}
-              <div className="flex gap-2 mt-2 sm:mt-0">
-                  <div className="text-center px-3 py-1 bg-green-100 rounded border border-green-200">
-                      <p className="text-[10px] font-black text-green-800 uppercase">FMC</p>
-                      <p className="text-lg font-black text-green-700 leading-none">{typeStat.opCat.fmc}</p>
+              {/* 2-ROW SUMMARY BUTTONS */}
+              <div className="flex flex-col gap-2 items-start lg:items-end w-full lg:w-auto">
+                  
+                  {/* ROW 1: STATUS (Active, Inactive, Maint) */}
+                  <div className="flex gap-2 w-full lg:w-auto">
+                      <SummaryBadge label="ACTIVE" value={typeStat.status.active} color="bg-green-100 text-green-800 border-green-200" />
+                      <SummaryBadge label="INACTIVE" value={typeStat.status.inactive} color="bg-red-100 text-red-800 border-red-200" />
+                      <SummaryBadge label="MAINT" value={typeStat.status.maintenance} color="bg-orange-100 text-orange-800 border-orange-200" />
                   </div>
-                  <div className="text-center px-3 py-1 bg-red-100 rounded border border-red-200">
-                      <p className="text-[10px] font-black text-red-800 uppercase">NMC</p>
-                      <p className="text-lg font-black text-red-700 leading-none">{typeStat.opCat.nmc}</p>
+
+                  {/* ROW 2: READINESS (FMC, Degrad, NMC) */}
+                  <div className="flex gap-2 w-full lg:w-auto">
+                      <SummaryBadge label="FMC" value={typeStat.opCat.fmc} color="bg-green-100 text-green-800 border-green-200" />
+                      <SummaryBadge label="DEGRAD" value={typeStat.opCat.degraded} color="bg-yellow-100 text-yellow-800 border-yellow-200" />
+                      <SummaryBadge label="NMC" value={typeStat.opCat.nmc} color="bg-red-100 text-red-800 border-red-200" />
                   </div>
+
               </div>
             </div>
 
@@ -160,9 +168,6 @@ export default function AnalyticsPage() {
                 <tbody className="divide-y divide-gray-100">
                   {tobList.map(tob => {
                     const data = typeStat.tobs[tob] || { status: {}, opCat: {} }
-                    // Only show rows that actually have vehicles (optional, keeps it clean)
-                    // But user requested "all vehicle type", so we keep the structure consistent.
-                    
                     return (
                       <tr key={tob} className="hover:bg-blue-50/30 transition-colors">
                         <td className="px-4 py-3 font-bold text-gray-800 flex items-center">
@@ -201,4 +206,14 @@ export default function AnalyticsPage() {
       </div>
     </div>
   )
+}
+
+// Helper Component for the Header Badges
+function SummaryBadge({ label, value, color }: any) {
+    return (
+        <div className={`flex-1 min-w-[60px] text-center px-2 py-1 rounded border ${color} flex flex-col justify-center`}>
+            <p className="text-[9px] font-black uppercase opacity-80">{label}</p>
+            <p className="text-sm font-black leading-none">{value}</p>
+        </div>
+    )
 }
