@@ -1,54 +1,74 @@
 "use client"
 import { useEffect, useState } from 'react'
-import { supabase } from '@/lib/supabase'
 import { useRouter } from 'next/navigation'
+import { supabase } from '@/lib/supabase'
 import { 
-  ArrowLeft, Wrench, Clock, CheckCircle, AlertTriangle, 
-  MoreHorizontal, Calendar, User, ArrowRight, Activity 
+  ArrowLeft, Wrench, AlertTriangle, Activity, CheckCircle, 
+  Calendar, MapPin, Play, CheckSquare, Clock, ArrowRight, User 
 } from 'lucide-react'
 
-export default function WorkshopBoard() {
+export default function WorkshopFloor() {
   const router = useRouter()
-  const [logs, setLogs] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
+  const [logs, setLogs] = useState<any[]>([])
 
+  // --- FETCH LOGS (Respects RLS) ---
   useEffect(() => {
-    fetchLogs()
+    async function fetchData() {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) return router.push('/login')
+
+      // We fetch logs AND the related vehicle details
+      const { data, error } = await supabase
+        .from('maintenance_logs')
+        .select(`
+          *,
+          vehicles (
+            vehicle_uid,
+            tob,
+            vehicle_type_name
+          )
+        `)
+        .order('created_at', { ascending: false })
+
+      if (error) {
+          console.error("Error fetching logs:", error.message)
+      } else if (data) {
+          // *** CRITICAL SECURITY FIX ***
+          // Filter out any log where the vehicle is null.
+          // This happens when RLS hides the vehicle from the user.
+          // By filtering it here, the "Unknown" card disappears completely.
+          const visibleLogs = data.filter((log: any) => log.vehicles !== null)
+          setLogs(visibleLogs)
+      }
+      
+      setLoading(false)
+    }
+    fetchData()
   }, [])
 
-  async function fetchLogs() {
-    // We fetch logs AND the related vehicle details (UID, TOB)
-    const { data, error } = await supabase
-      .from('maintenance_logs')
-      .select('*, vehicles(vehicle_uid, tob)')
-      .order('created_at', { ascending: false })
-    
-    if (error) alert('Error fetching logs: ' + error.message)
-    else setLogs(data || [])
-    setLoading(false)
-  }
-
+  // --- ACTIONS ---
   async function updateStatus(logId: string, newStatus: string) {
-    // Optimistic Update (Update UI immediately)
-    setLogs(prev => prev.map(l => l.id === logId ? { ...l, status: newStatus } : l))
+      // Optimistic Update
+      setLogs(prev => prev.map(l => l.id === logId ? { ...l, status: newStatus } : l))
 
-    const { error } = await supabase
-      .from('maintenance_logs')
-      .update({ status: newStatus })
-      .eq('id', logId)
-
-    if (error) {
-      alert("Failed to update: " + error.message)
-      fetchLogs() // Revert on error
-    }
+      const { error } = await supabase
+        .from('maintenance_logs')
+        .update({ status: newStatus })
+        .eq('id', logId)
+      
+      if (error) {
+          alert("Error updating: " + error.message)
+          window.location.reload() // Revert if failed
+      }
   }
 
-  // Filter logs into columns
+  // --- KANBAN COLUMNS ---
   const pending = logs.filter(l => l.status === 'Pending')
   const inProgress = logs.filter(l => l.status === 'In Progress')
   const resolved = logs.filter(l => l.status === 'Resolved')
 
-  if (loading) return <div className="p-8 font-black text-xl">Loading Workshop...</div>
+  if (loading) return <div className="p-8 font-black text-xl text-gray-800">Loading Workshop Floor...</div>
 
   return (
     <div className="min-h-screen bg-gray-100 p-4 md:p-6 overflow-x-auto">
@@ -80,6 +100,7 @@ export default function WorkshopBoard() {
           {pending.map(log => (
             <JobCard key={log.id} log={log} onMove={() => updateStatus(log.id, 'In Progress')} moveLabel="Start Job" moveColor="bg-blue-600" />
           ))}
+          {pending.length === 0 && <div className="text-center text-gray-400 font-bold py-10 opacity-50">No Pending Jobs</div>}
         </Column>
 
         {/* COLUMN 2: IN PROGRESS */}
@@ -92,6 +113,7 @@ export default function WorkshopBoard() {
           {inProgress.map(log => (
             <JobCard key={log.id} log={log} onMove={() => updateStatus(log.id, 'Resolved')} moveLabel="Mark Complete" moveColor="bg-green-600" />
           ))}
+          {inProgress.length === 0 && <div className="text-center text-blue-300 font-bold py-10 opacity-50">Floor Clear</div>}
         </Column>
 
         {/* COLUMN 3: RESOLVED */}
@@ -104,6 +126,7 @@ export default function WorkshopBoard() {
           {resolved.map(log => (
             <JobCard key={log.id} log={log} isResolved />
           ))}
+          {resolved.length === 0 && <div className="text-center text-green-600 font-bold py-10 opacity-50">No History</div>}
         </Column>
 
       </div>
@@ -130,12 +153,15 @@ function Column({ title, count, children, color, icon }: any) {
 }
 
 function JobCard({ log, onMove, moveLabel, moveColor, isResolved }: any) {
+  // Safe Access because we filtered nulls in the main component
+  const v = log.vehicles 
+
   return (
     <div className="bg-white p-4 rounded-lg shadow-sm border border-gray-200 hover:shadow-md transition-shadow">
        {/* Vehicle ID & Priority */}
        <div className="flex justify-between items-start mb-2">
           <span className="font-black text-lg text-gray-900 bg-gray-100 px-2 rounded">
-             {log.vehicles?.vehicle_uid || 'Unknown'}
+             {v.vehicle_uid}
           </span>
           <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded ${log.priority === 'Critical' ? 'bg-red-100 text-red-700' : 'bg-blue-100 text-blue-700'}`}>
              {log.priority}
@@ -145,12 +171,12 @@ function JobCard({ log, onMove, moveLabel, moveColor, isResolved }: any) {
        {/* TOB Location */}
        <div className="mb-3">
           <span className="text-xs font-bold text-gray-400 uppercase tracking-wider flex items-center">
-             <MapPinIcon /> {log.vehicles?.tob || '---'}
+             <MapPin className="w-3 h-3 mr-1" /> {v.tob}
           </span>
        </div>
 
        {/* Description */}
-       <p className="text-sm font-bold text-gray-700 mb-4 line-clamp-2">
+       <p className="text-sm font-bold text-gray-700 mb-4 line-clamp-2 border-l-2 border-gray-200 pl-2">
          {log.description}
        </p>
 
@@ -158,7 +184,7 @@ function JobCard({ log, onMove, moveLabel, moveColor, isResolved }: any) {
        <div className="flex items-center justify-between pt-3 border-t border-gray-100 text-xs text-gray-500 font-medium">
           <div className="flex items-center" title="Date Reported">
              <Calendar className="w-3 h-3 mr-1" />
-             {new Date(log.logged_date).toLocaleDateString()}
+             {new Date(log.created_at).toLocaleDateString()}
           </div>
           {log.responsible_person && (
              <div className="flex items-center" title="Assigned To">
@@ -176,8 +202,4 @@ function JobCard({ log, onMove, moveLabel, moveColor, isResolved }: any) {
        )}
     </div>
   )
-}
-
-function MapPinIcon() {
-  return <svg className="w-3 h-3 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
 }
