@@ -2,7 +2,7 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase'
 import { useRouter } from 'next/navigation'
-import { Car, CheckCircle, XCircle, AlertTriangle, Plus, Search, BarChart3, Grid, LogOut, Users, Wrench, MapPin } from 'lucide-react'
+import { Car, CheckCircle, XCircle, AlertTriangle, Plus, Search, BarChart3, Grid, LogOut, Users, Wrench, MapPin, Activity } from 'lucide-react'
 import Link from 'next/link'
 
 export default function Dashboard() {
@@ -32,7 +32,7 @@ export default function Dashboard() {
           console.error("Profile Fetch Error:", profileError)
       }
 
-      // Redirect Vehicle Users to their specific vehicle page
+      // Redirect Vehicle Users
       if (profile?.role === 'vehicle_user' && profile?.assigned_vehicle_id) {
         router.replace(`/vehicle/${profile.assigned_vehicle_id}`)
         return
@@ -58,20 +58,45 @@ export default function Dashboard() {
     router.refresh()
   }
 
+  // --- STATS LOGIC ---
   function calculateStats(data: any[]) {
     const total = data.length
+    // Active means "Active" in the database status column
     const active = data.filter(v => v.status === 'Active').length
+    // Inactive specifically tracks the "Inactive" status
     const inactive = data.filter(v => v.status === 'Inactive').length
+    // Critical tracks serious issues (NMC or Inactive)
     const critical = data.filter(v => v.operational_category === 'Non-Mission Capable' || v.status === 'Inactive').length
     return { total, active, inactive, critical }
   }
 
   const stats = calculateStats(vehicles)
+  
   const filteredVehicles = vehicles.filter(v => 
     (v.vehicle_uid || '').toLowerCase().includes(filter.toLowerCase()) ||
     (v.vehicle_type_name || '').toLowerCase().includes(filter.toLowerCase()) ||
     (v.tob || '').toLowerCase().includes(filter.toLowerCase())
   )
+
+  // --- HELPER FOR BADGE COLORS ---
+  const getStatusColor = (s: string) => {
+      if (s === 'Active') return 'bg-green-100 text-green-800'
+      if (s === 'Maintenance') return 'bg-orange-100 text-orange-800'
+      return 'bg-red-100 text-red-800'
+  }
+
+  const getOpCatColor = (c: string) => {
+      if (c === 'Fully Mission Capable') return 'bg-green-100 text-green-800'
+      if (c === 'Degraded') return 'bg-yellow-100 text-yellow-800'
+      return 'bg-red-100 text-red-800'
+  }
+
+  const getOpCatShort = (c: string) => {
+      if (c === 'Fully Mission Capable') return 'FMC'
+      if (c === 'Degraded') return 'Degraded'
+      if (c === 'Non-Mission Capable') return 'NMC'
+      return c
+  }
 
   if (loading) return <div className="min-h-screen flex items-center justify-center bg-gray-100"><div className="text-xl font-black text-gray-900">Verifying Security Clearance...</div></div>
 
@@ -84,7 +109,6 @@ export default function Dashboard() {
           <h1 className="text-2xl md:text-3xl font-black text-gray-900 tracking-tight">COMMAND DASHBOARD</h1>
           <div className="flex items-center gap-2 mt-1">
             <p className="text-gray-600 font-bold text-xs md:text-sm">Military Vehicle Accountability System</p>
-            {/* ROLE BADGE */}
             {role && (
                 <span className={`px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-wider ${role === 'super_admin' ? 'bg-purple-100 text-purple-700' : 'bg-gray-200 text-gray-600'}`}>
                     {role.replace('_', ' ')}
@@ -110,7 +134,7 @@ export default function Dashboard() {
                 </Link>
            )}
 
-           {/* ALL VEHICLES BUTTON (Restored!) */}
+           {/* ALL VEHICLES BUTTON */}
            <Link href="/all-vehicles" className="flex-1 md:flex-none flex items-center justify-center bg-gray-800 hover:bg-black text-white px-3 py-2 md:px-4 md:py-3 rounded-lg font-bold shadow-sm text-sm transition-colors">
              <Grid className="w-4 h-4 md:w-5 md:h-5 mr-2" /> All Vehicles
            </Link>
@@ -162,7 +186,11 @@ export default function Dashboard() {
                 <th className="px-6 py-4 border-b border-gray-100">Vehicle ID</th>
                 <th className="px-6 py-4 border-b border-gray-100">Type</th>
                 <th className="px-6 py-4 border-b border-gray-100">Location (TOB)</th>
-                <th className="px-6 py-4 border-b border-gray-100">Status</th>
+                
+                {/* NEW SPLIT HEADERS */}
+                <th className="px-6 py-4 border-b border-gray-100">Vehicle Status</th>
+                <th className="px-6 py-4 border-b border-gray-100">Op. Category</th>
+                
                 <th className="px-6 py-4 border-b border-gray-100 text-right">Action</th>
               </tr>
             </thead>
@@ -172,13 +200,23 @@ export default function Dashboard() {
                   <td className="px-6 py-4 font-black text-gray-900 whitespace-nowrap text-lg">{vehicle.vehicle_uid}</td>
                   <td className="px-6 py-4 font-bold text-gray-600 whitespace-nowrap">{vehicle.vehicle_type_name || '---'}</td>
                   <td className="px-6 py-4 font-bold text-gray-600 whitespace-nowrap">
-                     <span className="flex items-center"><MapPin className="w-3 h-3 mr-1 opacity-50"/> {vehicle.tob || '---'}</span>
+                      <span className="flex items-center"><MapPin className="w-3 h-3 mr-1 opacity-50"/> {vehicle.tob || '---'}</span>
                   </td>
+                  
+                  {/* VEHICLE STATUS BADGE */}
                   <td className="px-6 py-4 whitespace-nowrap">
-                    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold uppercase tracking-wide ${vehicle.status === 'Active' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
-                      {vehicle.status === 'Active' ? 'Ready' : 'Inactive'}
+                    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold uppercase tracking-wide ${getStatusColor(vehicle.status)}`}>
+                      {vehicle.status}
                     </span>
                   </td>
+
+                  {/* OP CATEGORY BADGE */}
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold uppercase tracking-wide ${getOpCatColor(vehicle.operational_category)}`}>
+                      {getOpCatShort(vehicle.operational_category)}
+                    </span>
+                  </td>
+
                   <td className="px-6 py-4 text-right whitespace-nowrap">
                     <Link href={`/vehicle/${vehicle.id}`} className="inline-block bg-white border-2 border-gray-200 group-hover:border-black text-black px-4 py-1.5 rounded-md font-bold text-xs uppercase tracking-wide transition-all">
                         View
@@ -200,14 +238,19 @@ export default function Dashboard() {
                         <span className="text-xl font-black text-gray-900 block">{vehicle.vehicle_uid}</span>
                         <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">{vehicle.vehicle_type_name}</span>
                     </div>
-                    <span className={`px-2 py-1 rounded text-[10px] font-black uppercase ${vehicle.status === 'Active' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
-                        {vehicle.status}
-                    </span>
+                    {/* Badge Stack on Mobile */}
+                    <div className="flex flex-col items-end gap-1">
+                        <span className={`px-2 py-0.5 rounded text-[10px] font-black uppercase ${getStatusColor(vehicle.status)}`}>
+                            {vehicle.status}
+                        </span>
+                        <span className={`px-2 py-0.5 rounded text-[10px] font-black uppercase ${getOpCatColor(vehicle.operational_category)}`}>
+                            {getOpCatShort(vehicle.operational_category)}
+                        </span>
+                    </div>
                 </div>
                 
                 <div className="flex items-center justify-between text-sm font-bold text-gray-600 bg-gray-50 p-2 rounded">
                     <span className="flex items-center"><MapPin className="w-4 h-4 mr-1 text-gray-400"/> {vehicle.tob}</span>
-                    <span>{vehicle.operational_category === 'Fully Mission Capable' ? '✅ FMC' : '⚠️ Issue'}</span>
                 </div>
 
                 <Link href={`/vehicle/${vehicle.id}`} className="w-full bg-black text-white text-center py-3 rounded-lg font-bold text-sm uppercase tracking-wide active:bg-gray-800">
