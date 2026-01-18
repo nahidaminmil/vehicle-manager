@@ -2,7 +2,7 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase'
 import { useRouter } from 'next/navigation'
-import { Car, CheckCircle, XCircle, AlertTriangle, Plus, Search, BarChart3, Grid, LogOut, Users, Shield } from 'lucide-react'
+import { Car, CheckCircle, XCircle, AlertTriangle, Plus, Search, BarChart3, Grid, LogOut, Users, Wrench } from 'lucide-react'
 import Link from 'next/link'
 
 export default function Dashboard() {
@@ -26,7 +26,7 @@ export default function Dashboard() {
         .single()
 
       if (profile) {
-          console.log("User Role Found:", profile.role) // Check Console if issues persist
+          console.log("User Role Found:", profile.role)
           setRole(profile.role)
       } else {
           console.error("Profile Fetch Error:", profileError)
@@ -84,7 +84,7 @@ export default function Dashboard() {
           <h1 className="text-3xl font-black text-gray-900 tracking-tight">COMMAND DASHBOARD</h1>
           <div className="flex items-center gap-2">
             <p className="text-gray-800 font-medium">Military Vehicle Accountability System</p>
-            {/* DEBUG BADGE: Shows your current role */}
+            {/* DEBUG BADGE */}
             {role && (
                 <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${role === 'super_admin' ? 'bg-purple-100 text-purple-700' : 'bg-gray-200 text-gray-600'}`}>
                     {role.replace('_', ' ')}
@@ -100,7 +100,14 @@ export default function Dashboard() {
 
            <div className="w-px h-10 bg-gray-300 hidden md:block mx-2"></div>
 
-           {/* USERS BUTTON - Strictly checks for 'super_admin' */}
+           {/* WORKSHOP BUTTON - New! */}
+           {(role === 'super_admin' || role === 'admin' || role === 'tob_admin') && (
+               <Link href="/workshop" className="flex-1 md:flex-none flex items-center justify-center bg-orange-600 hover:bg-orange-700 text-white px-4 py-3 rounded-lg font-bold shadow-md transition-colors mr-2">
+                  <Wrench className="w-5 h-5 mr-2" /> Workshop
+               </Link>
+           )}
+
+           {/* USERS BUTTON */}
            {role === 'super_admin' && (
                 <Link href="/users" className="flex-1 md:flex-none flex items-center justify-center bg-purple-900 hover:bg-black text-white px-4 py-3 rounded-lg font-bold shadow-md transition-colors mr-2">
                     <Users className="w-5 h-5 mr-2" /> Users
