@@ -5,7 +5,7 @@ import { supabase } from '@/lib/supabase'
 import { 
   ArrowLeft, CheckCircle, AlertTriangle, Camera, Wrench, 
   CheckSquare, Clock, Edit2, X, Save, Trash2, Plus, 
-  ImageIcon, User, AlertOctagon, Minus, ArrowDown, Calendar
+  ImageIcon, User, AlertOctagon, Minus, ArrowDown, Calendar, LogOut
 } from 'lucide-react'
 
 export default function VehicleDetails() {
@@ -163,6 +163,11 @@ export default function VehicleDetails() {
     alert('Status Updated!'); router.refresh(); window.location.reload()
   }
 
+  async function handleLogout() {
+    await supabase.auth.signOut()
+    router.push('/login')
+  }
+
   // --- SUBMIT FULL LOG ---
   async function handleSubmitLog() {
     if (!remark) return alert('Please write a fault description.')
@@ -221,9 +226,15 @@ export default function VehicleDetails() {
 
   return (
     <div className="min-h-screen bg-gray-100 p-4 pb-20">
-      <button onClick={() => router.push('/')} className="flex items-center text-gray-700 font-bold mb-4 bg-white p-2 rounded shadow-sm w-fit">
-        <ArrowLeft className="w-5 h-5 mr-2" /> Back to Dashboard
-      </button>
+      {/* HEADER: BACK & LOGOUT */}
+      <div className="flex justify-between items-center mb-6">
+        <button onClick={() => router.push('/')} className="flex items-center text-gray-700 font-bold bg-white px-3 py-2 rounded shadow-sm w-fit border border-gray-200 hover:bg-gray-50">
+           <ArrowLeft className="w-5 h-5 mr-2" /> Back to Dashboard
+        </button>
+        <button onClick={handleLogout} className="flex items-center text-red-600 bg-white px-3 py-2 rounded shadow-sm font-bold border border-red-100 hover:bg-red-50">
+           <LogOut className="w-5 h-5 mr-2" /> Sign Out
+        </button>
+      </div>
 
       {/* 1. PROFILE PHOTOS */}
       <div className="bg-white rounded-lg shadow-md overflow-hidden mb-6 p-4 border-t-4 border-blue-600">
@@ -289,44 +300,44 @@ export default function VehicleDetails() {
               <div className="space-y-4">
                   <div>
                       <p className="text-xs font-bold text-gray-500 uppercase mb-1">1. Fault Description (Required)</p>
-                      <textarea value={remark} onChange={(e) => setRemark(e.target.value)} className="w-full p-3 border-2 border-gray-300 rounded-md h-24 font-bold focus:border-orange-500" placeholder="Describe fault..." />
+                      <textarea value={remark} onChange={(e) => setRemark(e.target.value)} className="w-full p-3 border-2 border-gray-300 rounded-md h-24 font-bold focus:border-orange-500 text-gray-900 placeholder-gray-500" placeholder="Describe fault..." />
                   </div>
                   <div className="grid grid-cols-2 gap-2">
-                       <div>
+                        <div>
                             <p className="text-xs font-bold text-gray-500 uppercase mb-1">Priority</p>
-                            <select value={priority} onChange={(e) => setPriority(e.target.value)} className="w-full p-2 border-2 border-gray-300 rounded font-bold">
+                            <select value={priority} onChange={(e) => setPriority(e.target.value)} className="w-full p-2 border-2 border-gray-300 rounded font-bold text-gray-900">
                                 <option value="Low">Low</option>
                                 <option value="Routine">Routine</option>
                                 <option value="Critical">Critical</option>
                             </select>
-                       </div>
-                       <div>
+                        </div>
+                        <div>
                             <p className="text-xs font-bold text-gray-500 uppercase mb-1">Photo Evidence</p>
                             <label className="cursor-pointer w-full flex items-center justify-center p-2 border-2 border-dashed border-gray-400 rounded hover:bg-gray-50 bg-white">
                                 <Camera className="w-4 h-4 mr-2 text-gray-600"/>
                                 <span className="text-xs font-bold text-gray-700 truncate">{logFile ? "Photo Selected" : "Take Photo"}</span>
                                 <input type="file" accept="image/*" capture="environment" className="hidden" onChange={(e) => setLogFile(e.target.files ? e.target.files[0] : null)} />
                             </label>
-                       </div>
+                        </div>
                   </div>
               </div>
 
               <div className="bg-gray-50 p-4 rounded-lg border border-gray-200 space-y-3">
                   <h3 className="text-sm font-black uppercase text-gray-400 flex items-center"><User className="w-4 h-4 mr-1"/> Workshop / Officer Section</h3>
                   <div className="grid grid-cols-2 gap-3">
-                      <input type="text" value={actionReq} onChange={(e) => setActionReq(e.target.value)} className="w-full p-2 border rounded font-bold text-sm" placeholder="Action Required" />
-                      <input type="text" value={responsible} onChange={(e) => setResponsible(e.target.value)} className="w-full p-2 border rounded font-bold text-sm" placeholder="Resp. Person" />
+                      <input type="text" value={actionReq} onChange={(e) => setActionReq(e.target.value)} className="w-full p-2 border rounded font-bold text-sm text-gray-900 placeholder-gray-500" placeholder="Action Required" />
+                      <input type="text" value={responsible} onChange={(e) => setResponsible(e.target.value)} className="w-full p-2 border rounded font-bold text-sm text-gray-900 placeholder-gray-500" placeholder="Resp. Person" />
                   </div>
                   <div className="grid grid-cols-2 gap-3">
-                      <input type="number" value={estDays} onChange={(e) => setEstDays(e.target.value)} className="w-full p-2 border rounded font-bold text-sm" placeholder="Est. Repair Days" />
-                      <select value={maintStatus} onChange={(e) => setMaintStatus(e.target.value)} className="w-full p-2 border rounded font-bold text-sm">
+                      <input type="number" value={estDays} onChange={(e) => setEstDays(e.target.value)} className="w-full p-2 border rounded font-bold text-sm text-gray-900 placeholder-gray-500" placeholder="Est. Repair Days" />
+                      <select value={maintStatus} onChange={(e) => setMaintStatus(e.target.value)} className="w-full p-2 border rounded font-bold text-sm text-gray-900">
                           <option value="Pending">Status: Pending</option>
                           <option value="In Progress">Status: In Progress</option>
                           <option value="Resolved">Status: Resolved</option>
                       </select>
                   </div>
-                  <input type="text" value={officerRemarks} onChange={(e) => setOfficerRemarks(e.target.value)} className="w-full p-2 border rounded font-bold text-sm" placeholder="Workshop Officer Remarks" />
-                  <input type="text" value={genNotes} onChange={(e) => setGenNotes(e.target.value)} className="w-full p-2 border rounded font-bold text-sm" placeholder="Any Other Notes" />
+                  <input type="text" value={officerRemarks} onChange={(e) => setOfficerRemarks(e.target.value)} className="w-full p-2 border rounded font-bold text-sm text-gray-900 placeholder-gray-500" placeholder="Workshop Officer Remarks" />
+                  <input type="text" value={genNotes} onChange={(e) => setGenNotes(e.target.value)} className="w-full p-2 border rounded font-bold text-sm text-gray-900 placeholder-gray-500" placeholder="Any Other Notes" />
               </div>
           </div>
           <button onClick={handleSubmitLog} disabled={uploading} className="w-full mt-4 bg-orange-600 text-white py-3 rounded-lg font-black text-lg hover:bg-orange-700 shadow-md">
@@ -362,10 +373,10 @@ export default function VehicleDetails() {
                     <p className="text-xl font-black text-gray-900 mb-4 pl-1 border-l-2 border-gray-300">{log.description}</p>
 
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4 bg-gray-100/50 p-4 rounded-lg border border-gray-200">
-                         <div><p className="text-[10px] uppercase font-bold text-gray-400 mb-1">Action Required</p><p className="font-bold text-sm text-gray-800">{log.action_required || '---'}</p></div>
-                         <div><p className="text-[10px] uppercase font-bold text-gray-400 mb-1">Responsible Person</p><p className="font-bold text-sm text-gray-800">{log.responsible_person || '---'}</p></div>
-                         <div><p className="text-[10px] uppercase font-bold text-gray-400 mb-1">Officer Remarks</p><p className="font-bold text-sm text-gray-800">{log.remarks || '---'}</p></div>
-                         <div><p className="text-[10px] uppercase font-bold text-gray-400 mb-1">Notes</p><p className="font-bold text-sm text-gray-800">{log.notes || '---'}</p></div>
+                          <div><p className="text-[10px] uppercase font-bold text-gray-400 mb-1">Action Required</p><p className="font-bold text-sm text-gray-800">{log.action_required || '---'}</p></div>
+                          <div><p className="text-[10px] uppercase font-bold text-gray-400 mb-1">Responsible Person</p><p className="font-bold text-sm text-gray-800">{log.responsible_person || '---'}</p></div>
+                          <div><p className="text-[10px] uppercase font-bold text-gray-400 mb-1">Officer Remarks</p><p className="font-bold text-sm text-gray-800">{log.remarks || '---'}</p></div>
+                          <div><p className="text-[10px] uppercase font-bold text-gray-400 mb-1">Notes</p><p className="font-bold text-sm text-gray-800">{log.notes || '---'}</p></div>
                     </div>
                     
                     <div className="mt-2 p-3 bg-white rounded-lg border border-gray-200">
