@@ -4,7 +4,7 @@ import { supabase } from '@/lib/supabase'
 import { useRouter } from 'next/navigation'
 import { 
   ArrowLeft, UserPlus, Shield, Trash2, User, Truck, MapPin, 
-  Edit, X, Loader2, Save 
+  Edit, X, Loader2, Save, LogOut 
 } from 'lucide-react'
 
 export default function UserManagementPage() {
@@ -46,10 +46,8 @@ export default function UserManagementPage() {
 
       const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single()
       
-      // Strict Security Check
+      // Strict Security Check: Only Super Admin can be here
       if (profile?.role !== 'super_admin') {
-        // If we just created a user, we might be logged in as them.
-        // We shouldn't alert 'Access Denied', we should just redirect to login.
         return router.push('/login')
       }
 
@@ -70,12 +68,14 @@ export default function UserManagementPage() {
     setVehicles(data || [])
   }
 
-  // 2. CREATE USER (Fixed Logic)
+  // 2. CREATE USER (Updated for Auto-Authorization)
   async function handleCreateUser() {
     if (!newEmail || !newPassword) return alert('Email and Password required')
     setCreating(true)
 
-    // A. Sign Up (This switches session to the NEW user)
+    // A. Create the Auth User
+    // Note: Since you disabled "Confirm Email" in Supabase, this user is active IMMEDIATELY.
+    // However, this function signs you out and signs the NEW user in.
     const { data: authData, error: authError } = await supabase.auth.signUp({
       email: newEmail,
       password: newPassword
@@ -89,8 +89,7 @@ export default function UserManagementPage() {
 
     if (authData.user) {
         // B. Save Profile Data
-        // Since session switched, we are now the NEW user updating OUR OWN profile.
-        // This requires the RLS policy "Allow Users Update Own Profile".
+        // We are now logged in as the NEW user. We save OUR OWN profile.
         const profileData = {
             id: authData.user.id,
             email: newEmail,
@@ -107,10 +106,10 @@ export default function UserManagementPage() {
             console.error('Profile Error:', profileError)
             alert('User created, but profile setup failed: ' + profileError.message)
         } else {
-            // C. Success & Session Cleanup
-            alert(`User '${newEmail}' created successfully!\n\nNOTE: The system has signed you in as this new user.\nYou will now be logged out so you can sign back in as Admin.`)
+            // C. Success Message
+            alert(`User '${newEmail}' created successfully!\n\nIMPORTANT: The system has automatically signed you in as this new user.\nClick OK to be logged out so you can sign back in as Super Admin.`)
             
-            // Log out the new user immediately to prevent getting stuck
+            // D. Force Logout the new user
             await supabase.auth.signOut()
             router.push('/login')
         }
