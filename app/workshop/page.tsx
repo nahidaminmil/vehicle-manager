@@ -12,14 +12,12 @@ export default function WorkshopFloor() {
   const [loading, setLoading] = useState(true)
   const [logs, setLogs] = useState<any[]>([])
 
-  // --- FETCH FROM VIEW (Reliable & Fast) ---
+  // --- FETCH FROM VIEW ---
   useEffect(() => {
     async function fetchData() {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) return router.push('/login')
 
-      // Fetch from the new VIEW
-      // This bypasses the Table Permissions that were blocking you
       const { data, error } = await supabase
         .from('workshop_feed') 
         .select('*')
@@ -37,11 +35,10 @@ export default function WorkshopFloor() {
 
   // --- ACTIONS ---
   async function updateStatus(logId: string, newStatus: string) {
-      // Optimistic Update
       setLogs(prev => prev.map(l => l.id === logId ? { ...l, status: newStatus } : l))
 
       const { error } = await supabase
-        .from('maintenance_logs') // Updates still go to the real table
+        .from('maintenance_logs')
         .update({ status: newStatus })
         .eq('id', logId)
       
@@ -59,24 +56,25 @@ export default function WorkshopFloor() {
   if (loading) return <div className="p-8 font-black text-xl text-gray-800">Loading Workshop Floor...</div>
 
   return (
-    <div className="min-h-screen bg-gray-100 p-4 md:p-6 overflow-x-auto">
+    <div className="min-h-screen bg-gray-100 p-4 md:p-6">
       {/* HEADER */}
-      <div className="flex items-center justify-between mb-8">
+      <div className="flex flex-col md:flex-row items-start md:items-center justify-between mb-6 gap-4">
         <div>
            <button onClick={() => router.push('/')} className="flex items-center text-gray-500 hover:text-gray-900 font-bold mb-2">
              <ArrowLeft className="w-5 h-5 mr-1" /> Back to Command
            </button>
-           <h1 className="text-3xl font-black text-gray-900 uppercase tracking-tight flex items-center">
-             <Wrench className="w-8 h-8 mr-3 text-orange-600"/> Workshop Floor
+           <h1 className="text-2xl md:text-3xl font-black text-gray-900 uppercase tracking-tight flex items-center">
+             <Wrench className="w-6 h-6 md:w-8 md:h-8 mr-3 text-orange-600"/> Workshop Floor
            </h1>
         </div>
-        <div className="bg-white px-4 py-2 rounded-lg shadow-sm font-bold text-gray-600 border border-gray-200">
+        <div className="bg-white px-4 py-2 rounded-lg shadow-sm font-bold text-gray-600 border border-gray-200 text-sm md:text-base">
            Total Issues: <span className="text-black text-lg">{logs.length}</span>
         </div>
       </div>
 
       {/* KANBAN BOARD */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 h-full min-w-[1000px] md:min-w-0">
+      {/* Changed: Removed min-w and added consistent gap */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         
         {/* COLUMN 1: PENDING */}
         <Column 
@@ -88,7 +86,7 @@ export default function WorkshopFloor() {
           {pending.map(log => (
             <JobCard key={log.id} log={log} onMove={() => updateStatus(log.id, 'In Progress')} moveLabel="Start Job" moveColor="bg-blue-600" />
           ))}
-          {pending.length === 0 && <div className="text-center text-gray-400 font-bold py-10 opacity-50">No Pending Jobs</div>}
+          {pending.length === 0 && <div className="text-center text-gray-400 font-bold py-8 opacity-50">No Pending Jobs</div>}
         </Column>
 
         {/* COLUMN 2: IN PROGRESS */}
@@ -101,7 +99,7 @@ export default function WorkshopFloor() {
           {inProgress.map(log => (
             <JobCard key={log.id} log={log} onMove={() => updateStatus(log.id, 'Resolved')} moveLabel="Mark Complete" moveColor="bg-green-600" />
           ))}
-          {inProgress.length === 0 && <div className="text-center text-blue-300 font-bold py-10 opacity-50">Floor Clear</div>}
+          {inProgress.length === 0 && <div className="text-center text-blue-300 font-bold py-8 opacity-50">Floor Clear</div>}
         </Column>
 
         {/* COLUMN 3: RESOLVED */}
@@ -114,7 +112,7 @@ export default function WorkshopFloor() {
           {resolved.map(log => (
             <JobCard key={log.id} log={log} isResolved />
           ))}
-          {resolved.length === 0 && <div className="text-center text-green-600 font-bold py-10 opacity-50">No History</div>}
+          {resolved.length === 0 && <div className="text-center text-green-600 font-bold py-8 opacity-50">No History</div>}
         </Column>
 
       </div>
@@ -126,14 +124,15 @@ export default function WorkshopFloor() {
 
 function Column({ title, count, children, color, icon }: any) {
   return (
-    <div className="flex flex-col h-full">
-      <div className={`p-4 rounded-t-xl border-t-4 bg-white shadow-sm flex justify-between items-center ${color}`}>
-         <div className="flex items-center font-black text-gray-800 uppercase tracking-wide">
+    <div className="flex flex-col h-full rounded-xl shadow-sm border border-gray-200 overflow-hidden bg-white">
+      <div className={`p-4 border-t-4 flex justify-between items-center ${color}`}>
+         <div className="flex items-center font-black text-gray-800 uppercase tracking-wide text-sm md:text-base">
             {icon} <span className="ml-2">{title}</span>
          </div>
-         <span className="bg-gray-800 text-white text-xs font-bold px-2 py-1 rounded-full">{count}</span>
+         <span className="bg-gray-900 text-white text-xs font-bold px-2 py-1 rounded-full">{count}</span>
       </div>
-      <div className="bg-gray-200/50 p-3 rounded-b-xl flex-1 space-y-3 min-h-[500px]">
+      {/* Changed: Use flex-1 but ensure min-height is reasonable on mobile */}
+      <div className="bg-gray-100 p-3 space-y-3 min-h-[200px] md:min-h-[500px]">
          {children}
       </div>
     </div>
@@ -141,12 +140,11 @@ function Column({ title, count, children, color, icon }: any) {
 }
 
 function JobCard({ log, onMove, moveLabel, moveColor, isResolved }: any) {
-  // Use flat fields from the VIEW (log.vehicle_uid instead of log.vehicles.vehicle_uid)
   return (
     <div className="bg-white p-4 rounded-lg shadow-sm border border-gray-200 hover:shadow-md transition-shadow">
        {/* Vehicle ID & Priority */}
        <div className="flex justify-between items-start mb-2">
-          <span className="font-black text-lg text-gray-900 bg-gray-100 px-2 rounded">
+          <span className="font-black text-lg text-gray-900 bg-gray-50 border border-gray-100 px-2 rounded">
              {log.vehicle_uid}
           </span>
           <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded ${log.priority === 'Critical' ? 'bg-red-100 text-red-700' : 'bg-blue-100 text-blue-700'}`}>
@@ -156,8 +154,8 @@ function JobCard({ log, onMove, moveLabel, moveColor, isResolved }: any) {
 
        {/* TOB Location */}
        <div className="mb-3">
-          <span className="text-xs font-bold text-gray-400 uppercase tracking-wider flex items-center">
-             <MapPin className="w-3 h-3 mr-1" /> {log.tob}
+          <span className="text-xs font-bold text-gray-500 uppercase tracking-wider flex items-center">
+             <MapPin className="w-3 h-3 mr-1 text-gray-400" /> {log.tob}
           </span>
        </div>
 
@@ -182,7 +180,7 @@ function JobCard({ log, onMove, moveLabel, moveColor, isResolved }: any) {
 
        {/* ACTION BUTTON */}
        {!isResolved && (
-         <button onClick={onMove} className={`w-full mt-3 py-2 rounded text-white text-xs font-black uppercase flex items-center justify-center hover:opacity-90 transition-opacity ${moveColor}`}>
+         <button onClick={onMove} className={`w-full mt-3 py-3 md:py-2 rounded text-white text-xs font-black uppercase flex items-center justify-center hover:opacity-90 transition-opacity ${moveColor}`}>
             {moveLabel} <ArrowRight className="w-3 h-3 ml-1" />
          </button>
        )}
