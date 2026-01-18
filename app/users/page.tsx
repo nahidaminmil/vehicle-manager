@@ -30,6 +30,7 @@ export default function UserManagementPage() {
   const roles = [
     { val: 'super_admin', label: '👑 Super Admin' },
     { val: 'admin', label: '👮‍♂️ Admin Officer' },
+    { val: 'workshop_admin', label: '🔧 Workshop Admin' }, // <-- NEW ROLE ADDED
     { val: 'tob_admin', label: '🏰 TOB Commander' },
     { val: 'vehicle_user', label: '🚙 Vehicle User' }
   ]

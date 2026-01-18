@@ -32,7 +32,7 @@ export default function Dashboard() {
           console.error("Profile Fetch Error:", profileError)
       }
 
-      // Redirect Vehicle Users
+      // Redirect Vehicle Users to their specific vehicle page
       if (profile?.role === 'vehicle_user' && profile?.assigned_vehicle_id) {
         router.replace(`/vehicle/${profile.assigned_vehicle_id}`)
         return
@@ -84,7 +84,7 @@ export default function Dashboard() {
           <h1 className="text-3xl font-black text-gray-900 tracking-tight">COMMAND DASHBOARD</h1>
           <div className="flex items-center gap-2">
             <p className="text-gray-800 font-medium">Military Vehicle Accountability System</p>
-            {/* DEBUG BADGE */}
+            {/* DEBUG BADGE: Shows your current role */}
             {role && (
                 <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${role === 'super_admin' ? 'bg-purple-100 text-purple-700' : 'bg-gray-200 text-gray-600'}`}>
                     {role.replace('_', ' ')}
@@ -100,14 +100,14 @@ export default function Dashboard() {
 
            <div className="w-px h-10 bg-gray-300 hidden md:block mx-2"></div>
 
-           {/* WORKSHOP BUTTON - New! */}
-           {(role === 'super_admin' || role === 'admin' || role === 'tob_admin') && (
+           {/* WORKSHOP BUTTON - Updated for Workshop Admin */}
+           {(role === 'super_admin' || role === 'admin' || role === 'tob_admin' || role === 'workshop_admin') && (
                <Link href="/workshop" className="flex-1 md:flex-none flex items-center justify-center bg-orange-600 hover:bg-orange-700 text-white px-4 py-3 rounded-lg font-bold shadow-md transition-colors mr-2">
                   <Wrench className="w-5 h-5 mr-2" /> Workshop
                </Link>
            )}
 
-           {/* USERS BUTTON */}
+           {/* USERS BUTTON - Strictly checks for 'super_admin' */}
            {role === 'super_admin' && (
                 <Link href="/users" className="flex-1 md:flex-none flex items-center justify-center bg-purple-900 hover:bg-black text-white px-4 py-3 rounded-lg font-bold shadow-md transition-colors mr-2">
                     <Users className="w-5 h-5 mr-2" /> Users
