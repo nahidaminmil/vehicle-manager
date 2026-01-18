@@ -4,7 +4,7 @@ import { supabase } from '@/lib/supabase'
 import { useRouter } from 'next/navigation'
 import { 
   ArrowLeft, UserPlus, Shield, Trash2, User, Truck, MapPin, 
-  Edit, X, Loader2, Save, LogOut 
+  Edit, X, Loader2, Save 
 } from 'lucide-react'
 
 export default function UserManagementPage() {
@@ -90,7 +90,7 @@ export default function UserManagementPage() {
     if (authData.user) {
         // B. Save Profile Data
         // Since session switched, we are now the NEW user updating OUR OWN profile.
-        // This requires the RLS policy "Allow Users Update Own Profile" we added.
+        // This requires the RLS policy "Allow Users Update Own Profile".
         const profileData = {
             id: authData.user.id,
             email: newEmail,
@@ -110,7 +110,7 @@ export default function UserManagementPage() {
             // C. Success & Session Cleanup
             alert(`User '${newEmail}' created successfully!\n\nNOTE: The system has signed you in as this new user.\nYou will now be logged out so you can sign back in as Admin.`)
             
-            // Log out the new user immediately
+            // Log out the new user immediately to prevent getting stuck
             await supabase.auth.signOut()
             router.push('/login')
         }
