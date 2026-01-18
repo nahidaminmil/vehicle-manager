@@ -2,8 +2,9 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
-import { ArrowLeft, Search, Car, MapPin, Activity } from 'lucide-react'
+import { ArrowLeft, Search, Car, MapPin, Activity, QrCode, X } from 'lucide-react'
 import Link from 'next/link'
+import QRCode from "react-qr-code"
 
 export default function AllVehiclesPage() {
   const router = useRouter()
@@ -12,6 +13,9 @@ export default function AllVehiclesPage() {
   const [vehicles, setVehicles] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [types, setTypes] = useState<any[]>([])
+
+  // QR Modal State
+  const [showQr, setShowQr] = useState<any>(null)
 
   // --- FILTERS STATE ---
   const [search, setSearch] = useState('')
@@ -26,19 +30,33 @@ export default function AllVehiclesPage() {
   // --- FETCH DATA ---
   useEffect(() => {
     async function fetchData() {
-      // 1. Get All Vehicles
-      const { data: vData } = await supabase
+      // 1. Get Visual Data (Images, etc. from your View)
+      const { data: viewData } = await supabase
         .from('vehicle_dashboard_view')
         .select('*')
         .order('vehicle_uid', { ascending: true })
       
-      // 2. Get Types for Filter
+      // 2. Get Secret Data (Auto-Email/Pass from Raw Table)
+      // We need this because the View might not have the new columns yet
+      const { data: secretData } = await supabase
+        .from('vehicles')
+        .select('id, auto_email, auto_password')
+
+      // 3. Get Types for Filter
       const { data: tData } = await supabase
         .from('vehicle_types')
         .select('*')
         .order('name', { ascending: true })
 
-      if (vData) setVehicles(vData)
+      if (viewData && secretData) {
+          // Merge the visual data with the secret data
+          const merged = viewData.map(v => {
+              const secret = secretData.find(s => s.id === v.id)
+              return { ...v, ...secret } // Combine them
+          })
+          setVehicles(merged)
+      }
+      
       if (tData) setTypes(tData)
       setLoading(false)
     }
@@ -62,6 +80,12 @@ export default function AllVehiclesPage() {
     return 'bg-orange-100 text-orange-800 border-orange-200'
   }
 
+  // --- AUTO LOGIN URL GENERATOR ---
+  const getLoginUrl = (v: any) => {
+    const baseUrl = window.location.origin
+    return `${baseUrl}/login?auto_email=${encodeURIComponent(v.auto_email)}&auto_pass=${encodeURIComponent(v.auto_password)}`
+  }
+
   if (loading) return <div className="p-8 text-xl font-bold text-gray-800">Loading Fleet Gallery...</div>
 
   return (
@@ -82,7 +106,6 @@ export default function AllVehiclesPage() {
 
       {/* FILTER BAR */}
       <div className="bg-white p-4 rounded-xl shadow-md mb-8 border border-gray-200 grid grid-cols-1 md:grid-cols-4 gap-4">
-        
         {/* Search */}
         <div className="relative">
             <Search className="absolute left-3 top-3 w-5 h-5 text-gray-400" />
@@ -138,10 +161,10 @@ export default function AllVehiclesPage() {
       {/* GRID VIEW */}
       <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-6">
         {filteredVehicles.map((vehicle) => (
-            <Link key={vehicle.id} href={`/vehicle/${vehicle.id}`} className="group bg-white rounded-xl shadow-md hover:shadow-xl transition-all duration-300 border border-gray-200 overflow-hidden flex flex-col">
+            <div key={vehicle.id} className="group bg-white rounded-xl shadow-md hover:shadow-xl transition-all duration-300 border border-gray-200 overflow-hidden flex flex-col relative">
                 
                 {/* 1. IMAGE BOX */}
-                <div className="w-full aspect-[4/3] bg-gray-100 relative overflow-hidden border-b border-gray-100">
+                <Link href={`/vehicle/${vehicle.id}`} className="block w-full aspect-[4/3] bg-gray-100 relative overflow-hidden border-b border-gray-100">
                     <img 
                         src={vehicle.vehicle_image_url || 'https://placehold.co/600x400?text=No+Image'} 
                         alt="Vehicle"
@@ -152,26 +175,44 @@ export default function AllVehiclesPage() {
                             {vehicle.status === 'Active' ? 'Active' : 'Inactive'}
                         </span>
                     </div>
-                </div>
+                </Link>
 
                 {/* 2. INFO SECTION */}
                 <div className="p-4 flex flex-col gap-2">
                     <div className="flex justify-between items-start">
-                        <h2 className="text-xl font-black text-gray-900 group-hover:text-blue-700 transition-colors">{vehicle.vehicle_uid}</h2>
-                        <span className="text-xs font-bold text-gray-500 bg-gray-100 px-2 py-1 rounded uppercase tracking-wide">{vehicle.vehicle_type_name}</span>
+                        <Link href={`/vehicle/${vehicle.id}`}>
+                            <h2 className="text-xl font-black text-gray-900 group-hover:text-blue-700 transition-colors">{vehicle.vehicle_uid}</h2>
+                        </Link>
+                        {/* QR CODE BUTTON (Only if auto-user exists) */}
+                        {vehicle.auto_email && (
+                            <button 
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    e.preventDefault();
+                                    setShowQr(vehicle);
+                                }}
+                                className="bg-blue-600 hover:bg-blue-700 text-white p-1.5 rounded shadow flex items-center justify-center transition-colors"
+                                title="Show Login QR"
+                            >
+                                <QrCode className="w-4 h-4" />
+                            </button>
+                        )}
                     </div>
 
-                    <div className="flex items-center text-gray-500 font-bold text-sm mb-1">
-                        <MapPin className="w-4 h-4 mr-1 text-gray-400" /> {vehicle.tob}
+                    <div className="flex items-center justify-between">
+                         <span className="text-xs font-bold text-gray-500 bg-gray-100 px-2 py-1 rounded uppercase tracking-wide">{vehicle.vehicle_type_name}</span>
+                         <div className="flex items-center text-gray-500 font-bold text-sm">
+                            <MapPin className="w-4 h-4 mr-1 text-gray-400" /> {vehicle.tob}
+                         </div>
                     </div>
 
                     <div className="mt-auto pt-2 border-t border-gray-100">
-                         <span className={`block text-center text-xs font-black uppercase tracking-wide px-2 py-1.5 rounded ${getStatusColor(vehicle.operational_category)}`}>
+                          <span className={`block text-center text-xs font-black uppercase tracking-wide px-2 py-1.5 rounded ${getStatusColor(vehicle.operational_category)}`}>
                             {vehicle.operational_category || 'Unknown Status'}
-                         </span>
+                          </span>
                     </div>
                 </div>
-            </Link>
+            </div>
         ))}
       </div>
 
@@ -182,6 +223,43 @@ export default function AllVehiclesPage() {
                   <Car className="w-10 h-10 text-gray-400" />
               </div>
               <h3 className="text-xl font-bold text-gray-600">No vehicles match your filters.</h3>
+          </div>
+      )}
+
+      {/* QR CODE MODAL */}
+      {showQr && (
+          <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4" onClick={() => setShowQr(null)}>
+              <div className="bg-white p-6 rounded-2xl max-w-sm w-full text-center shadow-2xl" onClick={e => e.stopPropagation()}>
+                  <div className="flex justify-between items-center mb-4">
+                      <h3 className="text-xl font-black text-gray-900">QR Key: {showQr.vehicle_uid}</h3>
+                      <button onClick={() => setShowQr(null)} className="p-1 hover:bg-gray-100 rounded-full"><X className="w-6 h-6 text-gray-500"/></button>
+                  </div>
+                  
+                  <div className="bg-white p-4 border-4 border-black rounded-xl inline-block mb-4">
+                      <QRCode 
+                        value={getLoginUrl(showQr)} 
+                        size={200}
+                        style={{ height: "auto", maxWidth: "100%", width: "100%" }}
+                        viewBox={`0 0 256 256`}
+                      />
+                  </div>
+
+                  <p className="text-xs font-bold text-gray-500 mb-4">
+                      Scan this with any phone to instantly log in as {showQr.vehicle_uid}.
+                  </p>
+                  
+                  <div className="bg-gray-100 p-3 rounded text-left mb-4 border border-gray-200">
+                      <p className="text-[10px] uppercase font-bold text-gray-400 mb-1">Backup Login Details</p>
+                      <div className="flex justify-between">
+                         <span className="text-xs font-bold text-gray-500">User:</span>
+                         <span className="text-xs font-mono text-gray-900 select-all">{showQr.auto_email}</span>
+                      </div>
+                      <div className="flex justify-between">
+                         <span className="text-xs font-bold text-gray-500">Pass:</span>
+                         <span className="text-xs font-mono text-gray-900 select-all">{showQr.auto_password}</span>
+                      </div>
+                  </div>
+              </div>
           </div>
       )}
     </div>

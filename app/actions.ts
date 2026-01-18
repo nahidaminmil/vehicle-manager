@@ -85,3 +85,67 @@ export async function adminResetPassword(userId: string, newPassword: string) {
       return { success: false, error: err.message }
   }
 }
+
+// --- AUTOMATED VEHICLE + USER CREATION ---
+export async function createVehicleWithAutoUser(formData: any) {
+  const { 
+    vehicle_uid, 
+    tob, 
+    vehicle_type_id, 
+    operational_category, 
+    mileage 
+  } = formData
+
+  // 1. Generate Robot Credentials
+  // Email: un-1234@fleet.system
+  // Pass: random 8-character string
+  const cleanUid = vehicle_uid.replace(/[^a-zA-Z0-9]/g, '').toLowerCase()
+  const email = `${cleanUid}@fleet.system`
+  const password = Math.random().toString(36).slice(-8) + "Aa1!" // Strong-ish password
+
+  // 2. Create the Auth User (Supabase Auth)
+  const { data: authData, error: authError } = await supabaseAdmin.auth.admin.createUser({
+    email: email,
+    password: password,
+    email_confirm: true,
+    user_metadata: { role: 'vehicle_user' }
+  })
+
+  if (authError) return { success: false, error: "User Creation Failed: " + authError.message }
+
+  // 3. Create the Vehicle Entry (With Credentials stored)
+  const { data: vehicleData, error: vehicleError } = await supabaseAdmin
+    .from('vehicles')
+    .insert({
+        vehicle_uid,
+        tob,
+        vehicle_type_id,
+        operational_category,
+        mileage,
+        status: 'Active',
+        auto_email: email,      // Store for QR Code
+        auto_password: password // Store for QR Code
+    })
+    .select()
+    .single()
+
+  if (vehicleError) {
+      // Cleanup: If vehicle failed, delete the user we just made to keep things clean
+      await supabaseAdmin.auth.admin.deleteUser(authData.user.id)
+      return { success: false, error: "Vehicle DB Error: " + vehicleError.message }
+  }
+
+  // 4. Link User to Profile (The "Handshake")
+  const { error: profileError } = await supabaseAdmin
+    .from('profiles')
+    .upsert({
+      id: authData.user.id,
+      email: email,
+      role: 'vehicle_user',
+      assigned_vehicle_id: vehicleData.id // <--- CRITICAL LINK
+    })
+
+  if (profileError) return { success: false, error: "Profile Link Error: " + profileError.message }
+
+  return { success: true }
+}

@@ -1,15 +1,47 @@
 "use client"
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { supabase } from '@/lib/supabase'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { ShieldCheck, Lock, Mail, Loader2 } from 'lucide-react'
 
 export default function LoginPage() {
   const router = useRouter()
+  const searchParams = useSearchParams()
+  
   const [loading, setLoading] = useState(false)
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [isSignUp, setIsSignUp] = useState(false)
+
+  // New State for QR Login
+  const [autoLogging, setAutoLogging] = useState(false)
+
+  // --- QR CODE LISTENER ---
+  useEffect(() => {
+    const autoEmail = searchParams.get('auto_email')
+    const autoPass = searchParams.get('auto_pass')
+
+    if (autoEmail && autoPass) {
+        handleAutoLogin(autoEmail, autoPass)
+    }
+  }, [searchParams])
+
+  async function handleAutoLogin(e: string, p: string) {
+      setAutoLogging(true)
+      // Small delay to ensure Supabase is ready
+      await new Promise(r => setTimeout(r, 500)) 
+      
+      const { error } = await supabase.auth.signInWithPassword({ email: e, password: p })
+      
+      if (!error) {
+          router.push('/')
+          router.refresh()
+      } else {
+          alert('QR Code Expired or Invalid')
+          setAutoLogging(false)
+      }
+  }
+  // -------------------------
 
   async function handleAuth() {
     setLoading(true)
@@ -28,9 +60,20 @@ export default function LoginPage() {
     setLoading(false)
   }
 
+  // If QR Code is scanning, show full-screen loader
+  if (autoLogging) return (
+      <div className="min-h-screen bg-gray-900 flex flex-col items-center justify-center text-white">
+          <Loader2 className="w-16 h-16 animate-spin text-blue-500 mb-6" />
+          <h1 className="text-2xl font-black uppercase tracking-widest">Verifying Vehicle ID...</h1>
+          <p className="text-blue-400 font-bold mt-2">Accessing Secure Network</p>
+      </div>
+  )
+
   return (
     <div className="min-h-screen bg-gray-900 flex items-center justify-center p-4">
       <div className="bg-white w-full max-w-md rounded-2xl shadow-2xl overflow-hidden">
+        
+        {/* Your Custom Header */}
         <div className="bg-blue-900 p-8 text-center">
           <div className="mx-auto bg-blue-800 w-16 h-16 rounded-full flex items-center justify-center mb-4 shadow-lg">
             <ShieldCheck className="w-8 h-8 text-white" />
@@ -38,6 +81,8 @@ export default function LoginPage() {
           <h1 className="text-2xl font-black text-white uppercase tracking-wider">Secure Access</h1>
           <p className="text-blue-200 text-sm font-bold mt-1">Military Vehicle Accountability System</p>
         </div>
+
+        {/* Your Custom Form */}
         <div className="p-8">
           <div className="space-y-4">
             <div>
