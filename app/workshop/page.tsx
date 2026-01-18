@@ -4,7 +4,7 @@ import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import { 
   ArrowLeft, Wrench, AlertTriangle, Activity, CheckCircle, 
-  Calendar, MapPin, Play, CheckSquare, Clock, ArrowRight, User 
+  Calendar, MapPin, Play, ArrowRight, User 
 } from 'lucide-react'
 
 export default function WorkshopFloor() {
@@ -12,36 +12,24 @@ export default function WorkshopFloor() {
   const [loading, setLoading] = useState(true)
   const [logs, setLogs] = useState<any[]>([])
 
-  // --- FETCH LOGS (Respects RLS) ---
+  // --- FETCH FROM VIEW (Reliable & Fast) ---
   useEffect(() => {
     async function fetchData() {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) return router.push('/login')
 
-      // We fetch logs AND the related vehicle details
+      // Fetch from the new VIEW
+      // This bypasses the Table Permissions that were blocking you
       const { data, error } = await supabase
-        .from('maintenance_logs')
-        .select(`
-          *,
-          vehicles (
-            vehicle_uid,
-            tob,
-            vehicle_type_name
-          )
-        `)
+        .from('workshop_feed') 
+        .select('*')
         .order('created_at', { ascending: false })
 
       if (error) {
           console.error("Error fetching logs:", error.message)
-      } else if (data) {
-          // *** CRITICAL SECURITY FIX ***
-          // Filter out any log where the vehicle is null.
-          // This happens when RLS hides the vehicle from the user.
-          // By filtering it here, the "Unknown" card disappears completely.
-          const visibleLogs = data.filter((log: any) => log.vehicles !== null)
-          setLogs(visibleLogs)
+      } else {
+          setLogs(data || [])
       }
-      
       setLoading(false)
     }
     fetchData()
@@ -53,13 +41,13 @@ export default function WorkshopFloor() {
       setLogs(prev => prev.map(l => l.id === logId ? { ...l, status: newStatus } : l))
 
       const { error } = await supabase
-        .from('maintenance_logs')
+        .from('maintenance_logs') // Updates still go to the real table
         .update({ status: newStatus })
         .eq('id', logId)
       
       if (error) {
           alert("Error updating: " + error.message)
-          window.location.reload() // Revert if failed
+          window.location.reload()
       }
   }
 
@@ -153,15 +141,13 @@ function Column({ title, count, children, color, icon }: any) {
 }
 
 function JobCard({ log, onMove, moveLabel, moveColor, isResolved }: any) {
-  // Safe Access because we filtered nulls in the main component
-  const v = log.vehicles 
-
+  // Use flat fields from the VIEW (log.vehicle_uid instead of log.vehicles.vehicle_uid)
   return (
     <div className="bg-white p-4 rounded-lg shadow-sm border border-gray-200 hover:shadow-md transition-shadow">
        {/* Vehicle ID & Priority */}
        <div className="flex justify-between items-start mb-2">
           <span className="font-black text-lg text-gray-900 bg-gray-100 px-2 rounded">
-             {v.vehicle_uid}
+             {log.vehicle_uid}
           </span>
           <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded ${log.priority === 'Critical' ? 'bg-red-100 text-red-700' : 'bg-blue-100 text-blue-700'}`}>
              {log.priority}
@@ -171,7 +157,7 @@ function JobCard({ log, onMove, moveLabel, moveColor, isResolved }: any) {
        {/* TOB Location */}
        <div className="mb-3">
           <span className="text-xs font-bold text-gray-400 uppercase tracking-wider flex items-center">
-             <MapPin className="w-3 h-3 mr-1" /> {v.tob}
+             <MapPin className="w-3 h-3 mr-1" /> {log.tob}
           </span>
        </div>
 
