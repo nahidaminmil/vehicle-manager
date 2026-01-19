@@ -2,7 +2,10 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase'
 import { useRouter } from 'next/navigation'
-import { Car, CheckCircle, XCircle, AlertTriangle, Plus, Search, BarChart3, Grid, LogOut, Users, Wrench, MapPin, Table } from 'lucide-react'
+import { 
+  Car, CheckCircle, XCircle, AlertTriangle, Plus, Search, 
+  BarChart3, Grid, LogOut, Users, Wrench, MapPin, Table 
+} from 'lucide-react'
 import Link from 'next/link'
 
 export default function Dashboard() {
@@ -12,8 +15,7 @@ export default function Dashboard() {
   const [errorMsg, setErrorMsg] = useState('') 
   const [filter, setFilter] = useState('')
   
-  // --- NEW: STATE FOR CLICKABLE CARDS ---
-  // Options: 'ALL', 'READY', 'OFF_ROAD', 'CRITICAL'
+  // --- NEW FILTER STATES: 'ALL', 'ACTIVE', 'INACTIVE', 'MAINTENANCE' ---
   const [statusFilter, setStatusFilter] = useState('ALL') 
   
   const [role, setRole] = useState('') 
@@ -62,13 +64,13 @@ export default function Dashboard() {
     router.refresh()
   }
 
-  // --- STATS LOGIC ---
+  // --- UPDATED STATS CALCULATION (Strictly based on 'status' column) ---
   function calculateStats(data: any[]) {
     const total = data.length
     const active = data.filter(v => v.status === 'Active').length
     const inactive = data.filter(v => v.status === 'Inactive').length
-    const critical = data.filter(v => v.operational_category === 'Non-Mission Capable' || v.status === 'Inactive').length
-    return { total, active, inactive, critical }
+    const maintenance = data.filter(v => v.status === 'Maintenance').length
+    return { total, active, inactive, maintenance }
   }
 
   const stats = calculateStats(vehicles)
@@ -82,12 +84,12 @@ export default function Dashboard() {
 
     // 2. Card Status Filter
     let matchesStatus = true
-    if (statusFilter === 'READY') {
+    if (statusFilter === 'ACTIVE') {
         matchesStatus = v.status === 'Active'
-    } else if (statusFilter === 'OFF_ROAD') {
+    } else if (statusFilter === 'INACTIVE') {
         matchesStatus = v.status === 'Inactive'
-    } else if (statusFilter === 'CRITICAL') {
-        matchesStatus = (v.operational_category === 'Non-Mission Capable' || v.status === 'Inactive')
+    } else if (statusFilter === 'MAINTENANCE') {
+        matchesStatus = v.status === 'Maintenance'
     }
 
     return matchesText && matchesStatus
@@ -165,7 +167,7 @@ export default function Dashboard() {
         </div>
       )}
 
-      {/* STATS CARDS - CLICKABLE BUTTONS */}
+      {/* STATS CARDS - CLICKABLE BUTTONS (UPDATED CATEGORIES) */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4 mb-6 md:mb-8">
         <StatCard 
             title="Total Fleet" 
@@ -176,28 +178,28 @@ export default function Dashboard() {
             onClick={() => setStatusFilter('ALL')}
         />
         <StatCard 
-            title="Mission Ready" 
+            title="Active" 
             value={stats.active} 
             icon={<CheckCircle className="w-5 h-5 md:w-6 md:h-6"/>} 
             color="bg-green-600" 
-            isActive={statusFilter === 'READY'}
-            onClick={() => setStatusFilter('READY')}
+            isActive={statusFilter === 'ACTIVE'}
+            onClick={() => setStatusFilter('ACTIVE')}
         />
         <StatCard 
-            title="Off Road" 
+            title="Inactive" 
             value={stats.inactive} 
             icon={<XCircle className="w-5 h-5 md:w-6 md:h-6"/>} 
             color="bg-red-600" 
-            isActive={statusFilter === 'OFF_ROAD'}
-            onClick={() => setStatusFilter('OFF_ROAD')}
+            isActive={statusFilter === 'INACTIVE'}
+            onClick={() => setStatusFilter('INACTIVE')}
         />
         <StatCard 
-            title="Critical" 
-            value={stats.critical} 
-            icon={<AlertTriangle className="w-5 h-5 md:w-6 md:h-6"/>} 
+            title="Under Maintenance" 
+            value={stats.maintenance} 
+            icon={<Wrench className="w-5 h-5 md:w-6 md:h-6"/>} 
             color="bg-orange-600" 
-            isActive={statusFilter === 'CRITICAL'}
-            onClick={() => setStatusFilter('CRITICAL')}
+            isActive={statusFilter === 'MAINTENANCE'}
+            onClick={() => setStatusFilter('MAINTENANCE')}
         />
       </div>
 
