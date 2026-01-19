@@ -2,7 +2,6 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase'
 import { useRouter } from 'next/navigation'
-// ADDED 'Table' icon here
 import { Car, CheckCircle, XCircle, AlertTriangle, Plus, Search, BarChart3, Grid, LogOut, Users, Wrench, MapPin, Table } from 'lucide-react'
 import Link from 'next/link'
 
@@ -12,6 +11,11 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true)
   const [errorMsg, setErrorMsg] = useState('') 
   const [filter, setFilter] = useState('')
+  
+  // --- NEW: STATE FOR CLICKABLE CARDS ---
+  // Options: 'ALL', 'READY', 'OFF_ROAD', 'CRITICAL'
+  const [statusFilter, setStatusFilter] = useState('ALL') 
+  
   const [role, setRole] = useState('') 
 
   useEffect(() => {
@@ -69,11 +73,25 @@ export default function Dashboard() {
 
   const stats = calculateStats(vehicles)
   
-  const filteredVehicles = vehicles.filter(v => 
-    (v.vehicle_uid || '').toLowerCase().includes(filter.toLowerCase()) ||
-    (v.vehicle_type_name || '').toLowerCase().includes(filter.toLowerCase()) ||
-    (v.tob || '').toLowerCase().includes(filter.toLowerCase())
-  )
+  // --- UPDATED FILTERING LOGIC ---
+  const filteredVehicles = vehicles.filter(v => {
+    // 1. Text Search Filter
+    const matchesText = (v.vehicle_uid || '').toLowerCase().includes(filter.toLowerCase()) ||
+                        (v.vehicle_type_name || '').toLowerCase().includes(filter.toLowerCase()) ||
+                        (v.tob || '').toLowerCase().includes(filter.toLowerCase())
+
+    // 2. Card Status Filter
+    let matchesStatus = true
+    if (statusFilter === 'READY') {
+        matchesStatus = v.status === 'Active'
+    } else if (statusFilter === 'OFF_ROAD') {
+        matchesStatus = v.status === 'Inactive'
+    } else if (statusFilter === 'CRITICAL') {
+        matchesStatus = (v.operational_category === 'Non-Mission Capable' || v.status === 'Inactive')
+    }
+
+    return matchesText && matchesStatus
+  })
 
   // --- HELPER FOR BADGE COLORS ---
   const getStatusColor = (s: string) => {
@@ -126,11 +144,9 @@ export default function Dashboard() {
              <Grid className="w-4 h-4 md:w-5 md:h-5 mr-2" /> All Vehicles
            </Link>
 
-           {/* --- NEW STATISTICS BUTTON --- */}
            <Link href="/vehicle-statistics" className="flex-1 md:flex-none flex items-center justify-center bg-teal-600 hover:bg-teal-700 text-white px-3 py-2 md:px-4 md:py-3 rounded-lg font-bold shadow-sm text-sm transition-colors">
              <Table className="w-4 h-4 md:w-5 md:h-5 mr-2" /> Statistics
            </Link>
-           {/* ----------------------------- */}
 
            <Link href="/analytics" className="flex-1 md:flex-none flex items-center justify-center bg-purple-700 hover:bg-purple-800 text-white px-3 py-2 md:px-4 md:py-3 rounded-lg font-bold shadow-sm text-sm transition-colors">
              <BarChart3 className="w-4 h-4 md:w-5 md:h-5 mr-2" /> Analytics
@@ -149,12 +165,40 @@ export default function Dashboard() {
         </div>
       )}
 
-      {/* STATS CARDS */}
+      {/* STATS CARDS - CLICKABLE BUTTONS */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4 mb-6 md:mb-8">
-        <StatCard title="Total Fleet" value={stats.total} icon={<Car className="w-5 h-5 md:w-6 md:h-6"/>} color="bg-blue-600" />
-        <StatCard title="Mission Ready" value={stats.active} icon={<CheckCircle className="w-5 h-5 md:w-6 md:h-6"/>} color="bg-green-600" />
-        <StatCard title="Off Road" value={stats.inactive} icon={<XCircle className="w-5 h-5 md:w-6 md:h-6"/>} color="bg-red-600" />
-        <StatCard title="Critical" value={stats.critical} icon={<AlertTriangle className="w-5 h-5 md:w-6 md:h-6"/>} color="bg-orange-600" />
+        <StatCard 
+            title="Total Fleet" 
+            value={stats.total} 
+            icon={<Car className="w-5 h-5 md:w-6 md:h-6"/>} 
+            color="bg-blue-600" 
+            isActive={statusFilter === 'ALL'}
+            onClick={() => setStatusFilter('ALL')}
+        />
+        <StatCard 
+            title="Mission Ready" 
+            value={stats.active} 
+            icon={<CheckCircle className="w-5 h-5 md:w-6 md:h-6"/>} 
+            color="bg-green-600" 
+            isActive={statusFilter === 'READY'}
+            onClick={() => setStatusFilter('READY')}
+        />
+        <StatCard 
+            title="Off Road" 
+            value={stats.inactive} 
+            icon={<XCircle className="w-5 h-5 md:w-6 md:h-6"/>} 
+            color="bg-red-600" 
+            isActive={statusFilter === 'OFF_ROAD'}
+            onClick={() => setStatusFilter('OFF_ROAD')}
+        />
+        <StatCard 
+            title="Critical" 
+            value={stats.critical} 
+            icon={<AlertTriangle className="w-5 h-5 md:w-6 md:h-6"/>} 
+            color="bg-orange-600" 
+            isActive={statusFilter === 'CRITICAL'}
+            onClick={() => setStatusFilter('CRITICAL')}
+        />
       </div>
 
       {/* SEARCH BAR */}
@@ -167,6 +211,11 @@ export default function Dashboard() {
             className="w-full bg-transparent outline-none text-gray-900 font-bold placeholder-gray-400 text-base" 
             onChange={(e) => setFilter(e.target.value)}
           />
+          {statusFilter !== 'ALL' && (
+              <span className="ml-2 text-xs font-black uppercase px-3 py-1 bg-gray-900 text-white rounded-full whitespace-nowrap animate-pulse">
+                  Filter: {statusFilter.replace('_', ' ')}
+              </span>
+          )}
         </div>
       </div>
 
@@ -185,6 +234,13 @@ export default function Dashboard() {
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100 bg-white">
+              {filteredVehicles.length === 0 && (
+                  <tr>
+                      <td colSpan={6} className="px-6 py-8 text-center text-gray-400 font-bold">
+                          No vehicles found matching the selected filters.
+                      </td>
+                  </tr>
+              )}
               {filteredVehicles.map((vehicle: any) => (
                 <tr key={vehicle.id} className="hover:bg-blue-50 transition-colors group">
                   <td className="px-6 py-4 font-black text-gray-900 whitespace-nowrap text-lg">{vehicle.vehicle_uid}</td>
@@ -258,16 +314,19 @@ export default function Dashboard() {
   )
 }
 
-function StatCard({ title, value, icon, color }: any) {
+function StatCard({ title, value, icon, color, onClick, isActive }: any) {
   return (
-    <div className={`${color} rounded-xl shadow-sm p-4 text-white flex flex-col justify-between h-24 md:h-auto relative overflow-hidden`}>
+    <button 
+        onClick={onClick}
+        className={`${color} ${isActive ? 'ring-4 ring-offset-2 ring-gray-400 scale-[1.02]' : 'hover:scale-[1.02]'} transition-all duration-200 rounded-xl shadow-sm p-4 text-white flex flex-col justify-between h-24 md:h-auto relative overflow-hidden text-left w-full group`}
+    >
       <div className="z-10">
         <p className="text-[10px] md:text-xs font-black opacity-80 uppercase tracking-wider">{title}</p>
         <p className="text-2xl md:text-3xl font-black mt-0.5">{value}</p>
       </div>
-      <div className="absolute -bottom-2 -right-2 p-3 bg-white/10 rounded-full z-0 transform rotate-12">
+      <div className="absolute -bottom-2 -right-2 p-3 bg-white/10 rounded-full z-0 transform rotate-12 group-hover:scale-110 transition-transform">
         {icon}
       </div>
-    </div>
+    </button>
   )
 }
