@@ -2,9 +2,10 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
+import Link from 'next/link'
 import { 
   ArrowLeft, Wrench, AlertTriangle, Activity, CheckCircle, 
-  Calendar, MapPin, Play, ArrowRight, User 
+  Calendar, MapPin, ArrowRight, User, ExternalLink, Clock
 } from 'lucide-react'
 
 export default function WorkshopFloor() {
@@ -18,6 +19,7 @@ export default function WorkshopFloor() {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) return router.push('/login')
 
+      // Fetch from the secure system view
       const { data, error } = await supabase
         .from('workshop_feed') 
         .select('*')
@@ -35,11 +37,14 @@ export default function WorkshopFloor() {
 
   // --- ACTIONS ---
   async function updateStatus(logId: string, newStatus: string) {
+      if(!confirm(`Move ticket to ${newStatus}?`)) return
+
+      // Optimistic Update (Immediate UI change)
       setLogs(prev => prev.map(l => l.id === logId ? { ...l, status: newStatus } : l))
 
       const { error } = await supabase
         .from('maintenance_logs')
-        .update({ status: newStatus })
+        .update({ status: newStatus, updated_at: new Date().toISOString() }) // Update timestamp too
         .eq('id', logId)
       
       if (error) {
@@ -56,7 +61,7 @@ export default function WorkshopFloor() {
   if (loading) return <div className="p-8 font-black text-xl text-gray-800">Loading Workshop Floor...</div>
 
   return (
-    <div className="min-h-screen bg-gray-100 p-4 md:p-6">
+    <div className="min-h-screen bg-gray-100 p-4 md:p-6 pb-24">
       {/* HEADER */}
       <div className="flex flex-col md:flex-row items-start md:items-center justify-between mb-6 gap-4">
         <div>
@@ -73,7 +78,6 @@ export default function WorkshopFloor() {
       </div>
 
       {/* KANBAN BOARD */}
-      {/* Changed: Removed min-w and added consistent gap */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         
         {/* COLUMN 1: PENDING */}
@@ -131,7 +135,6 @@ function Column({ title, count, children, color, icon }: any) {
          </div>
          <span className="bg-gray-900 text-white text-xs font-bold px-2 py-1 rounded-full">{count}</span>
       </div>
-      {/* Changed: Use flex-1 but ensure min-height is reasonable on mobile */}
       <div className="bg-gray-100 p-3 space-y-3 min-h-[200px] md:min-h-[500px]">
          {children}
       </div>
@@ -140,10 +143,25 @@ function Column({ title, count, children, color, icon }: any) {
 }
 
 function JobCard({ log, onMove, moveLabel, moveColor, isResolved }: any) {
+  
+  // --- CALCULATE DAYS COUNT ---
+  const getDaysCount = () => {
+      const start = new Date(log.logged_date).getTime()
+      // If resolved, stop counting at 'updated_at' (completion time). If active, count to NOW.
+      const end = (isResolved && log.updated_at) ? new Date(log.updated_at).getTime() : new Date().getTime()
+      
+      const diffTime = Math.abs(end - start)
+      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) 
+      return diffDays
+  }
+
+  const days = getDaysCount()
+
   return (
-    <div className="bg-white p-4 rounded-lg shadow-sm border border-gray-200 hover:shadow-md transition-shadow">
-       {/* Vehicle ID & Priority */}
-       <div className="flex justify-between items-start mb-2">
+    <div className="bg-white p-4 rounded-lg shadow-sm border border-gray-200 hover:shadow-md transition-shadow flex flex-col gap-3">
+       
+       {/* 1. TOP ROW: ID & Priority */}
+       <div className="flex justify-between items-start">
           <span className="font-black text-lg text-gray-900 bg-gray-50 border border-gray-100 px-2 rounded">
              {log.vehicle_uid}
           </span>
@@ -152,35 +170,41 @@ function JobCard({ log, onMove, moveLabel, moveColor, isResolved }: any) {
           </span>
        </div>
 
-       {/* TOB Location */}
-       <div className="mb-3">
-          <span className="text-xs font-bold text-gray-500 uppercase tracking-wider flex items-center">
-             <MapPin className="w-3 h-3 mr-1 text-gray-400" /> {log.tob}
-          </span>
+       {/* 2. INFO ROW: Type & Location */}
+       <div className="flex justify-between items-center text-xs font-bold text-gray-500 uppercase">
+          <span className="flex items-center"><User className="w-3 h-3 mr-1"/> {log.vehicle_type_name}</span>
+          <span className="flex items-center"><MapPin className="w-3 h-3 mr-1 text-gray-400"/> {log.tob}</span>
        </div>
 
-       {/* Description */}
-       <p className="text-sm font-bold text-gray-700 mb-4 line-clamp-2 border-l-2 border-gray-200 pl-2">
+       {/* 3. DESCRIPTION */}
+       <p className="text-sm font-bold text-gray-700 line-clamp-2 border-l-2 border-gray-200 pl-2">
          {log.description}
        </p>
 
-       {/* Footer Info */}
-       <div className="flex items-center justify-between pt-3 border-t border-gray-100 text-xs text-gray-500 font-medium">
-          <div className="flex items-center" title="Date Reported">
-             <Calendar className="w-3 h-3 mr-1" />
-             {new Date(log.created_at).toLocaleDateString()}
-          </div>
-          {log.responsible_person && (
-             <div className="flex items-center" title="Assigned To">
-                <User className="w-3 h-3 mr-1" />
-                {log.responsible_person}
-             </div>
-          )}
+       {/* 4. NEW FEATURE: STATUS GRID (Days & Profile) */}
+       <div className="grid grid-cols-2 gap-2 mt-1">
+           {/* Days Counter */}
+           <div className={`text-center py-2 rounded border flex flex-col justify-center ${isResolved ? 'bg-green-50 border-green-100 text-green-800' : 'bg-orange-50 border-orange-100 text-orange-800'}`}>
+               <p className="text-[9px] uppercase font-black opacity-70 mb-0.5">Duration</p>
+               <p className="text-lg font-black leading-none">{days} <span className="text-[10px]">Days</span></p>
+           </div>
+
+           {/* Vehicle Profile Button */}
+           <Link href={`/vehicle/${log.vehicle_id}`} className="bg-gray-100 hover:bg-gray-200 text-gray-700 text-center py-2 rounded border border-gray-200 flex flex-col items-center justify-center transition-colors group">
+               <ExternalLink className="w-4 h-4 mb-1 group-hover:scale-110 transition-transform"/>
+               <span className="text-[9px] font-black uppercase">View Profile</span>
+           </Link>
        </div>
 
-       {/* ACTION BUTTON */}
+       {/* 5. FOOTER: Date */}
+       <div className="flex items-center justify-end text-[10px] text-gray-400 font-medium">
+          <Clock className="w-3 h-3 mr-1" />
+          Reported: {new Date(log.logged_date).toLocaleDateString()}
+       </div>
+
+       {/* 6. ACTION BUTTON */}
        {!isResolved && (
-         <button onClick={onMove} className={`w-full mt-3 py-3 md:py-2 rounded text-white text-xs font-black uppercase flex items-center justify-center hover:opacity-90 transition-opacity ${moveColor}`}>
+         <button onClick={onMove} className={`w-full py-3 md:py-2 rounded text-white text-xs font-black uppercase flex items-center justify-center hover:opacity-90 transition-opacity ${moveColor}`}>
             {moveLabel} <ArrowRight className="w-3 h-3 ml-1" />
          </button>
        )}

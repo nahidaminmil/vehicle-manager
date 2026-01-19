@@ -6,7 +6,7 @@ import { deleteVehicle } from '@/app/actions'
 import QRCode from "react-qr-code" 
 import { 
   ArrowLeft, CheckCircle, AlertTriangle, Camera, Wrench, 
-  CheckSquare, Clock, Edit2, X, Save, Trash2, Plus, 
+  Clock, Edit2, X, Save, Trash2, Plus, 
   ImageIcon, User, AlertOctagon, Minus, ArrowDown, Calendar, LogOut, QrCode
 } from 'lucide-react'
 
@@ -26,29 +26,23 @@ export default function VehicleDetails() {
   // --- QR MODAL ---
   const [showQr, setShowQr] = useState(false)
 
-  // --- EDIT PROFILE STATE ---
+  // --- EDIT VEHICLE PROFILE STATE ---
   const [isEditing, setIsEditing] = useState(false)
   const [editFormData, setEditFormData] = useState({
-    vehicle_uid: '', 
-    tob: '', 
-    vehicle_type_id: '', 
-    mileage: 0, 
-    operational_category: '', 
-    status: '',
-    description: '' // <--- NEW FIELD ADDED HERE
+    vehicle_uid: '', tob: '', vehicle_type_id: '', mileage: 0, operational_category: '', status: '', description: ''
   })
 
-  // --- LOG FORM STATE ---
+  // --- MAINTENANCE LOG EDITING STATE (NEW) ---
+  const [editingLogId, setEditingLogId] = useState<string | null>(null)
+  const [editLogData, setEditLogData] = useState<any>({})
+
+  // --- NEW ISSUE REPORT FORM STATE ---
   const [uploading, setUploading] = useState(false)
   const [newStatus, setNewStatus] = useState('')
   const [inactiveDate, setInactiveDate] = useState('')
-  
-  // --- NEW ISSUE REPORT DATA ---
   const [remark, setRemark] = useState('')
   const [priority, setPriority] = useState('Routine')
   const [logFile, setLogFile] = useState<File | null>(null)
-  
-  // Maintenance Details Fields
   const [actionReq, setActionReq] = useState('')
   const [responsible, setResponsible] = useState('')
   const [estDays, setEstDays] = useState('')
@@ -63,18 +57,14 @@ export default function VehicleDetails() {
   
   // --- FETCH DATA ---
   async function fetchData() {
-    // 1. Get User Role (For Delete Button)
     const { data: { user } } = await supabase.auth.getUser()
     if (user) {
         const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single()
         if(profile) setUserRole(profile.role)
     }
 
-    // 2. Get Vehicle + Secret Credentials
     const { data: vehicleRaw } = await supabase.from('vehicles').select('*').eq('id', id).single()
     const { data: vehicleView } = await supabase.from('vehicle_dashboard_view').select('*').eq('id', id).single()
-    
-    // Merge view data with raw data
     const vehicleData = { ...vehicleView, ...vehicleRaw }
 
     const { data: typesData } = await supabase.from('vehicle_types').select('*')
@@ -106,7 +96,7 @@ export default function VehicleDetails() {
         mileage: vehicleData.mileage || 0,
         operational_category: vehicleData.operational_category || 'Fully Mission Capable',
         status: vehicleData.status || 'Active',
-        description: vehicleData.description || '' // <--- LOAD EXISTING DESCRIPTION
+        description: vehicleData.description || '' 
       })
 
       if (vehicleData.inactive_since) {
@@ -178,16 +168,10 @@ export default function VehicleDetails() {
         mileage: editFormData.mileage,
         operational_category: editFormData.operational_category,
         status: editFormData.status,
-        description: editFormData.description // <--- SAVE DESCRIPTION
+        description: editFormData.description
       }).eq('id', vehicle.id)
     if(error) alert("Error saving: " + error.message)
     else { setIsEditing(false); fetchData() }
-  }
-
-  async function handleUpdateStatus() {
-    const d = newStatus === 'Inactive' ? (new Date(inactiveDate).toISOString()) : null
-    await supabase.from('vehicles').update({ status: newStatus, inactive_since: d }).eq('id', vehicle.id)
-    alert('Status Updated!'); router.refresh(); window.location.reload()
   }
 
   async function handleLogout() {
@@ -195,22 +179,13 @@ export default function VehicleDetails() {
     router.push('/login')
   }
 
-  // --- DELETE VEHICLE (SUPER ADMIN) ---
   async function handleDeleteVehicle() {
       const confirmText = prompt("WARNING: This will delete the Vehicle, all Maintenance Logs, Photos, and Unlink the User.\n\nType 'DELETE' to confirm:")
       if (confirmText !== 'DELETE') return 
-
       setLoading(true)
-      // Call Server Action
       const result = await deleteVehicle(vehicle.id)
-      
-      if (result.success) {
-          alert('Vehicle Destroyed Successfully.')
-          router.push('/')
-      } else {
-          alert('Error: ' + result.error)
-          setLoading(false)
-      }
+      if (result.success) { alert('Vehicle Destroyed Successfully.'); router.push('/') } 
+      else { alert('Error: ' + result.error); setLoading(false) }
   }
 
   // --- SUBMIT FULL LOG ---
@@ -246,27 +221,52 @@ export default function VehicleDetails() {
         setRemark(''); setActionReq(''); setResponsible(''); setLogFile(null); 
         setPriority('Routine'); setEstDays(''); setOfficerRemarks(''); setGenNotes(''); setMaintStatus('Pending');
         await fetchData() 
-    } catch (err: any) {
-        alert("Error submitting: " + err.message)
-    } finally {
-        setUploading(false)
-    }
+    } catch (err: any) { alert("Error submitting: " + err.message) } finally { setUploading(false) }
   }
 
-  // --- PRIORITY UI HELPERS ---
+  // --- EDIT EXISTING LOG (Workshop Admin Only) ---
+  function startEditingLog(log: any) {
+      setEditingLogId(log.id)
+      setEditLogData({
+          description: log.description,
+          priority: log.priority,
+          status: log.status,
+          action_required: log.action_required || '',
+          responsible_person: log.responsible_person || '',
+          estimated_repair_days: log.estimated_repair_days || 0,
+          remarks: log.remarks || '',
+          notes: log.notes || ''
+      })
+  }
+
+  async function saveLogChanges(logId: string) {
+      const { error } = await supabase.from('maintenance_logs').update({
+          ...editLogData,
+          updated_at: new Date().toISOString() // Force update timestamp
+      }).eq('id', logId)
+
+      if (error) alert("Failed to update: " + error.message)
+      else {
+          alert("Log Updated Successfully!")
+          setEditingLogId(null)
+          fetchData()
+      }
+  }
+
+  // --- UI HELPERS ---
   const getPriorityBadge = (p: string) => {
       if (p === 'Critical') return <span className="flex items-center bg-red-600 text-white px-3 py-1 rounded-full text-xs font-black uppercase"><AlertOctagon className="w-4 h-4 mr-1"/> Critical</span>
       if (p === 'Low') return <span className="flex items-center bg-green-600 text-white px-3 py-1 rounded-full text-xs font-black uppercase"><ArrowDown className="w-4 h-4 mr-1"/> Low</span>
       return <span className="flex items-center bg-blue-600 text-white px-3 py-1 rounded-full text-xs font-black uppercase"><Minus className="w-4 h-4 mr-1"/> Routine</span>
   }
 
-  const getLoginUrl = (v: any) => {
-    const baseUrl = window.location.origin
-    return `${baseUrl}/login?auto_email=${encodeURIComponent(v.auto_email)}&auto_pass=${encodeURIComponent(v.auto_password)}`
-  }
+  const getLoginUrl = (v: any) => `${window.location.origin}/login?auto_email=${encodeURIComponent(v.auto_email)}&auto_pass=${encodeURIComponent(v.auto_password)}`
 
   if (loading) return <div className="p-8 font-bold text-xl">Loading...</div>
   if (!vehicle) return <div className="p-8 font-bold text-xl text-red-600">Vehicle not found (ID: {id})</div>
+
+  // Permission Check
+  const isWorkshopAdmin = (userRole === 'workshop_admin' || userRole === 'super_admin')
 
   return (
     <div className="min-h-screen bg-gray-100 p-4 pb-24">
@@ -327,7 +327,7 @@ export default function VehicleDetails() {
             <div><label className="block text-xs font-extrabold text-gray-500 uppercase tracking-wider mb-1">Vehicle ID</label>{isEditing ? <input type="text" value={editFormData.vehicle_uid} onChange={(e) => setEditFormData({...editFormData, vehicle_uid: e.target.value})} className="w-full p-2 border-2 border-blue-200 rounded font-bold"/> : <p className="text-lg font-black text-gray-900">{vehicle.vehicle_uid}</p>}</div>
             <div><label className="block text-xs font-extrabold text-gray-500 uppercase tracking-wider mb-1">Location (TOB)</label>{isEditing ? <select value={editFormData.tob} onChange={(e) => setEditFormData({...editFormData, tob: e.target.value})} className="w-full p-2 border-2 border-blue-200 rounded font-bold">{tobList.map(t => <option key={t} value={t}>{t}</option>)}</select> : <p className="text-lg font-bold text-gray-900">{vehicle.tob}</p>}</div>
             
-            {/* NEW DESCRIPTION FIELD */}
+            {/* DESCRIPTION FIELD */}
             <div className="md:col-span-2">
                 <label className="block text-xs font-extrabold text-gray-500 uppercase tracking-wider mb-1">Description / Spec</label>
                 {isEditing ? (
@@ -357,11 +357,10 @@ export default function VehicleDetails() {
         </div>
       </div>
 
-      {/* 3. REPORT NEW ISSUE (Mobile Optimized) */}
+      {/* 3. REPORT NEW ISSUE */}
       <div className="bg-white p-6 rounded-lg shadow-md mb-8 border-t-4 border-orange-500">
           <h2 className="text-xl font-black mb-4 flex items-center text-orange-700"><AlertTriangle className="w-6 h-6 mr-2" /> Report New Issue</h2>
           
-          {/* Changed grid-cols-2 to grid-cols-1 on Mobile */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               
               {/* Left Side: Fault */}
@@ -390,7 +389,7 @@ export default function VehicleDetails() {
                   </div>
               </div>
 
-              {/* Right Side: Maintenance Details (Renamed) */}
+              {/* Right Side: Maintenance Details */}
               <div className="bg-gray-50 p-4 rounded-lg border border-gray-200 space-y-3">
                   <h3 className="text-sm font-black uppercase text-gray-400 flex items-center"><User className="w-4 h-4 mr-1"/> Maintenance Details</h3>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -414,7 +413,7 @@ export default function VehicleDetails() {
           </button>
       </div>
 
-      {/* 4. MAINTENANCE HISTORY */}
+      {/* 4. MAINTENANCE HISTORY (NEW: Full Detail & Inline Editing) */}
       <div className="bg-white rounded-lg shadow-lg overflow-hidden border border-gray-200 mb-8">
         <div className="p-4 bg-gray-800 border-b border-gray-900 flex items-center justify-between">
             <h3 className="text-lg font-black text-white uppercase tracking-wider flex items-center"><Wrench className="w-5 h-5 mr-2" /> Maintenance History</h3>
@@ -422,32 +421,112 @@ export default function VehicleDetails() {
         <div className="divide-y divide-gray-200 bg-gray-50">
             {logs.length === 0 && <div className="p-8 text-center text-gray-500 font-bold">No maintenance records found.</div>}
             
-            {logs.map((log) => (
-                <div key={log.id} className="p-5 hover:bg-white transition-colors border-l-4 border-transparent hover:border-blue-500">
+            {logs.map((log) => {
+                const isEditingThis = editingLogId === log.id
+                
+                return (
+                <div key={log.id} className={`p-5 transition-colors border-l-4 ${isEditingThis ? 'bg-blue-50 border-blue-500' : 'hover:bg-white border-transparent hover:border-gray-300'}`}>
+                    
+                    {/* Header Row: Priority & Status & Time */}
                     <div className="flex flex-col md:flex-row justify-between items-start mb-4">
                         <div className="flex flex-wrap items-center gap-3">
-                            {getPriorityBadge(log.priority)}
+                            {/* PRIORITY EDITING */}
+                            {isEditingThis ? (
+                                <select value={editLogData.priority} onChange={e => setEditLogData({...editLogData, priority: e.target.value})} className="border-2 border-blue-300 p-1 rounded font-bold text-sm">
+                                    <option value="Routine">Routine</option>
+                                    <option value="Low">Low</option>
+                                    <option value="Critical">Critical</option>
+                                </select>
+                            ) : getPriorityBadge(log.priority)}
+                            
                             <span className="text-xs text-gray-500 font-bold flex items-center bg-gray-100 px-2 py-1 rounded">
-                                <Clock className="w-3 h-3 mr-1"/> Updated: {log.logged_date ? new Date(log.logged_date).toLocaleString() : '---'}
-                            </span>
-                             <span className="text-xs text-gray-500 font-bold flex items-center bg-gray-100 px-2 py-1 rounded">
-                                <Calendar className="w-3 h-3 mr-1"/> Est. Days: {log.estimated_repair_days || 0}
+                                <Clock className="w-3 h-3 mr-1"/> Updated: {log.updated_at ? new Date(log.updated_at).toLocaleString() : new Date(log.logged_date).toLocaleString()}
                             </span>
                         </div>
-                        <span className={`px-3 py-1 text-xs font-black uppercase rounded-full ${log.status === 'Resolved' ? 'bg-green-100 text-green-800' : 'bg-orange-100 text-orange-800'}`}>
-                            {log.status}
-                        </span>
+                        
+                        <div className="flex items-center gap-2 mt-2 md:mt-0">
+                            {/* STATUS EDITING */}
+                            {isEditingThis ? (
+                                <select value={editLogData.status} onChange={e => setEditLogData({...editLogData, status: e.target.value})} className="border-2 border-blue-300 p-1 rounded font-bold text-sm bg-white">
+                                    <option value="Pending">Pending</option>
+                                    <option value="In Progress">In Progress</option>
+                                    <option value="Resolved">Resolved</option>
+                                </select>
+                            ) : (
+                                <span className={`px-3 py-1 text-xs font-black uppercase rounded-full ${log.status === 'Resolved' ? 'bg-green-100 text-green-800' : 'bg-orange-100 text-orange-800'}`}>
+                                    {log.status}
+                                </span>
+                            )}
+                            
+                            {/* WORKSHOP ADMIN EDIT BUTTON */}
+                            {isWorkshopAdmin && !isEditingThis && (
+                                <button onClick={() => startEditingLog(log)} className="text-blue-600 hover:bg-blue-100 p-1.5 rounded flex items-center font-bold text-xs">
+                                    <Edit2 className="w-4 h-4 mr-1"/> Edit
+                                </button>
+                            )}
+                        </div>
                     </div>
                     
-                    <p className="text-xl font-black text-gray-900 mb-4 pl-1 border-l-2 border-gray-300">{log.description}</p>
+                    {/* DESCRIPTION EDITING */}
+                    <div className="mb-4">
+                        <p className="text-[10px] uppercase font-bold text-gray-400 mb-1">Fault Description</p>
+                        {isEditingThis ? (
+                            <textarea value={editLogData.description} onChange={e => setEditLogData({...editLogData, description: e.target.value})} className="w-full p-2 border-2 border-blue-300 rounded font-bold text-gray-900" rows={2}/>
+                        ) : (
+                            <p className="text-xl font-black text-gray-900 pl-1 border-l-2 border-gray-300">{log.description}</p>
+                        )}
+                    </div>
 
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4 bg-gray-100/50 p-4 rounded-lg border border-gray-200">
-                          <div><p className="text-[10px] uppercase font-bold text-gray-400 mb-1">Action Required</p><p className="font-bold text-sm text-gray-800">{log.action_required || '---'}</p></div>
-                          <div><p className="text-[10px] uppercase font-bold text-gray-400 mb-1">Responsible Person</p><p className="font-bold text-sm text-gray-800">{log.responsible_person || '---'}</p></div>
-                          <div><p className="text-[10px] uppercase font-bold text-gray-400 mb-1">Workshop Remarks</p><p className="font-bold text-sm text-gray-800">{log.remarks || '---'}</p></div>
-                          <div><p className="text-[10px] uppercase font-bold text-gray-400 mb-1">Notes</p><p className="font-bold text-sm text-gray-800">{log.notes || '---'}</p></div>
+                    {/* DETAILED FIELDS GRID (FULLY VISIBLE & EDITABLE) */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4 bg-gray-100/50 p-4 rounded-lg border border-gray-200 shadow-sm">
+                          
+                          {/* Action Required */}
+                          <div>
+                              <p className="text-[10px] uppercase font-bold text-gray-400 mb-1">Action Required</p>
+                              {isEditingThis ? <input type="text" value={editLogData.action_required} onChange={e => setEditLogData({...editLogData, action_required: e.target.value})} className="w-full p-1 border-2 border-blue-300 rounded text-sm font-bold"/> 
+                              : <p className="font-bold text-sm text-gray-800">{log.action_required || '---'}</p>}
+                          </div>
+                          
+                          {/* Responsible Person */}
+                          <div>
+                              <p className="text-[10px] uppercase font-bold text-gray-400 mb-1">Responsible Person</p>
+                              {isEditingThis ? <input type="text" value={editLogData.responsible_person} onChange={e => setEditLogData({...editLogData, responsible_person: e.target.value})} className="w-full p-1 border-2 border-blue-300 rounded text-sm font-bold"/> 
+                              : <p className="font-bold text-sm text-gray-800">{log.responsible_person || '---'}</p>}
+                          </div>
+                          
+                          {/* Est Repair Days */}
+                          <div>
+                              <p className="text-[10px] uppercase font-bold text-gray-400 mb-1">Est. Repair Days</p>
+                              {isEditingThis ? <input type="number" value={editLogData.estimated_repair_days} onChange={e => setEditLogData({...editLogData, estimated_repair_days: e.target.value})} className="w-full p-1 border-2 border-blue-300 rounded text-sm font-bold"/> 
+                              : <p className="font-bold text-sm text-gray-800">{log.estimated_repair_days || '0'} Days</p>}
+                          </div>
+                          
+                          {/* Workshop Remarks */}
+                          <div>
+                              <p className="text-[10px] uppercase font-bold text-gray-400 mb-1">Workshop Remarks</p>
+                              {isEditingThis ? <input type="text" value={editLogData.remarks} onChange={e => setEditLogData({...editLogData, remarks: e.target.value})} className="w-full p-1 border-2 border-blue-300 rounded text-sm font-bold"/> 
+                              : <p className="font-bold text-sm text-gray-800">{log.remarks || '---'}</p>}
+                          </div>
+                          
+                          {/* Other Notes */}
+                          <div className="md:col-span-2">
+                              <p className="text-[10px] uppercase font-bold text-gray-400 mb-1">Other Notes</p>
+                              {isEditingThis ? <input type="text" value={editLogData.notes} onChange={e => setEditLogData({...editLogData, notes: e.target.value})} className="w-full p-1 border-2 border-blue-300 rounded text-sm font-bold"/> 
+                              : <p className="font-bold text-sm text-gray-800">{log.notes || '---'}</p>}
+                          </div>
                     </div>
+
+                    {/* SAVE / CANCEL BUTTONS */}
+                    {isEditingThis && (
+                        <div className="flex justify-end gap-3 mb-4">
+                            <button onClick={() => setEditingLogId(null)} className="px-4 py-2 bg-gray-200 text-gray-700 rounded font-bold text-sm">Cancel</button>
+                            <button onClick={() => saveLogChanges(log.id)} className="px-4 py-2 bg-green-600 text-white rounded font-bold text-sm flex items-center shadow hover:bg-green-700 transition-colors">
+                                <CheckCircle className="w-4 h-4 mr-2"/> Save Changes
+                            </button>
+                        </div>
+                    )}
                     
+                    {/* Photos */}
                     <div className="mt-2 p-3 bg-white rounded-lg border border-gray-200">
                         <h4 className="text-xs font-black text-gray-400 uppercase flex items-center mb-2"><ImageIcon className="w-3 h-3 mr-1"/> Evidence</h4>
                         <div className="flex flex-wrap gap-2">
@@ -463,7 +542,7 @@ export default function VehicleDetails() {
                         </div>
                     </div>
                 </div>
-            ))}
+            )})}
         </div>
       </div>
 
