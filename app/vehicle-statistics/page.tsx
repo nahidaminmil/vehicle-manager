@@ -2,7 +2,7 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
-import { ArrowLeft, Table, Lock } from 'lucide-react'
+import { ArrowLeft, Table, Lock, FileText } from 'lucide-react'
 
 export default function StatisticsPage() {
   const router = useRouter()
@@ -12,7 +12,7 @@ export default function StatisticsPage() {
   const [matrix, setMatrix] = useState<any[]>([]) 
   const [types, setTypes] = useState<any[]>([])   
   const [remarks, setRemarks] = useState<any>({}) 
-  const [isAdmin, setIsAdmin] = useState(false)   
+  const [canEdit, setCanEdit] = useState(false)   
   
   // Hardcoded TOB list to ensure order and existence
   const tobList = ['NDROMO', 'BAYOO', 'RHOO', 'DRODRO'] 
@@ -26,8 +26,12 @@ export default function StatisticsPage() {
     const { data: { user } } = await supabase.auth.getUser()
     if (user) {
         const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single()
+        
+        // PERMISSION LOGIC:
+        // 'admin' & 'super_admin' = TRUE (Can Edit)
+        // 'tob_admin' & others = FALSE (Read Only)
         if (profile && (profile.role === 'admin' || profile.role === 'super_admin')) {
-            setIsAdmin(true)
+            setCanEdit(true)
         }
     }
 
@@ -65,7 +69,7 @@ export default function StatisticsPage() {
 
   // --- SAVE REMARK ON BLUR ---
   async function handleRemarkBlur(tob: string, value: string) {
-    if (!isAdmin) return
+    if (!canEdit) return
 
     // Optimistic Update
     setRemarks((prev: any) => ({ ...prev, [tob]: value }))
@@ -95,18 +99,22 @@ export default function StatisticsPage() {
 
       {/* STATISTICS TABLE */}
       <div className="bg-white rounded-xl shadow-lg border border-gray-200 overflow-hidden">
+        {/* Mobile Optimization: overflow-x-auto allows horizontal scrolling */}
         <div className="overflow-x-auto">
             <table className="w-full text-sm text-left">
                 {/* TABLE HEAD */}
                 <thead className="bg-gray-800 text-white uppercase text-xs font-extrabold tracking-wider">
                     <tr>
+                        {/* Added min-w classes to prevent squashing on mobile */}
                         <th className="px-6 py-4 border-r border-gray-700 min-w-[150px]">Location (TOB)</th>
+                        
                         {/* Dynamic Columns for Vehicle Types */}
                         {types.map(t => (
-                            <th key={t.id} className="px-4 py-4 text-center border-r border-gray-700">{t.name}</th>
+                            <th key={t.id} className="px-4 py-4 text-center border-r border-gray-700 min-w-[100px]">{t.name}</th>
                         ))}
-                        <th className="px-4 py-4 text-center bg-blue-900 border-r border-gray-700">TOTAL</th>
-                        <th className="px-6 py-4 min-w-[200px]">Remarks (Admin Only)</th>
+                        
+                        <th className="px-4 py-4 text-center bg-blue-900 border-r border-gray-700 min-w-[80px]">TOTAL</th>
+                        <th className="px-6 py-4 min-w-[250px]">Remarks</th>
                     </tr>
                 </thead>
 
@@ -140,7 +148,8 @@ export default function StatisticsPage() {
 
                             {/* REMARKS FIELD */}
                             <td className="px-4 py-3 relative">
-                                {isAdmin ? (
+                                {canEdit ? (
+                                    /* EDITABLE (Admin/Super Admin) */
                                     <input 
                                         type="text" 
                                         defaultValue={remarks[row.tob_name] || ''}
@@ -149,11 +158,16 @@ export default function StatisticsPage() {
                                         className="w-full bg-yellow-50 border border-yellow-200 rounded px-2 py-1 text-xs focus:ring-2 focus:ring-yellow-400 outline-none text-gray-800 font-bold"
                                     />
                                 ) : (
-                                    <div className="flex items-center text-xs text-gray-500 italic">
+                                    /* READ ONLY (TOB Admin / Others) */
+                                    <div className="flex items-center text-xs text-gray-500">
                                         {remarks[row.tob_name] ? (
-                                            <span className="text-gray-800 not-italic">{remarks[row.tob_name]}</span>
+                                            <span className="text-gray-900 font-bold bg-gray-50 px-2 py-1 rounded border border-gray-200 block w-full">
+                                                {remarks[row.tob_name]}
+                                            </span>
                                         ) : (
-                                            <><Lock className="w-3 h-3 mr-1"/> Locked</>
+                                            <span className="text-gray-400 italic flex items-center">
+                                                <FileText className="w-3 h-3 mr-1"/> No Remarks
+                                            </span>
                                         )}
                                     </div>
                                 )}
