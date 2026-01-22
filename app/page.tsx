@@ -3,8 +3,8 @@ import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase'
 import { useRouter } from 'next/navigation'
 import { 
-  Car, CheckCircle, XCircle, AlertTriangle, Plus, Search, 
-  BarChart3, Grid, LogOut, Users, Wrench, MapPin, Table, Settings, Activity 
+  Car, CheckCircle, XCircle, Wrench, Activity, Plus, Search, 
+  BarChart3, Grid, LogOut, Users, MapPin, Table, Settings 
 } from 'lucide-react'
 import Link from 'next/link'
 
@@ -69,13 +69,14 @@ export default function Dashboard() {
 
   // --- 1. HELPER FOR STATUS COLORS ---
   const getStatusColor = (s: string) => {
-      if (s === 'Active') return 'bg-green-100 text-green-800'
-      if (s === 'Maintenance') return 'bg-orange-100 text-orange-800'
-      if (s === 'Inactive') return 'bg-red-100 text-red-800'
+      const status = (s || '').toLowerCase()
+      if (status === 'active') return 'bg-green-100 text-green-800'
+      if (status === 'maintenance') return 'bg-orange-100 text-orange-800'
+      if (status === 'inactive') return 'bg-red-100 text-red-800'
       return 'bg-gray-100 text-gray-800' 
   }
 
-  // --- 2. HELPER FOR OP CAT COLORS (NEW) ---
+  // --- 2. HELPER FOR OP CAT COLORS (MATCHING ANALYTICS) ---
   const getOpCatColor = (c: string) => {
       const cat = (c || '').toLowerCase()
       // Blue for Ready/FMC
@@ -86,6 +87,15 @@ export default function Dashboard() {
       if (cat.includes('non') || cat.includes('nmc')) return 'bg-red-100 text-red-800'
       
       return 'bg-gray-100 text-gray-800'
+  }
+
+  // --- 3. HELPER FOR ICONS (Restoring specific icons) ---
+  const getStatusIcon = (name: string) => {
+      const s = name.toLowerCase()
+      if (s === 'active') return <CheckCircle className="w-6 h-6"/>
+      if (s === 'inactive') return <XCircle className="w-6 h-6"/>
+      if (s === 'maintenance') return <Wrench className="w-6 h-6"/>
+      return <Activity className="w-6 h-6"/>
   }
 
   if (loading) return <div className="min-h-screen flex items-center justify-center bg-gray-100"><div className="text-xl font-black text-gray-900">Loading Command Dashboard...</div></div>
@@ -154,18 +164,20 @@ export default function Dashboard() {
         {/* Render a card for each Status found in DB */}
         {statusList.map(statusName => {
             const count = vehicles.filter(v => v.status === statusName).length
-            // Determine color dynamically or default to gray
+            
+            // Determine color dynamically
             let color = 'bg-gray-600'
-            if (statusName === 'Active') color = 'bg-green-600'
-            else if (statusName === 'Maintenance') color = 'bg-orange-600'
-            else if (statusName === 'Inactive') color = 'bg-red-600'
+            const s = statusName.toLowerCase()
+            if (s === 'active') color = 'bg-green-600'
+            else if (s === 'maintenance') color = 'bg-orange-600'
+            else if (s === 'inactive') color = 'bg-red-600'
 
             return (
                 <StatCard 
                     key={statusName}
                     title={statusName} 
                     value={count} 
-                    icon={<Activity className="w-6 h-6"/>} 
+                    icon={getStatusIcon(statusName)} 
                     color={color} 
                     isActive={statusFilter === statusName}
                     onClick={() => setStatusFilter(statusName)}
