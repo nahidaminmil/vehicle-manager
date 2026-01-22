@@ -13,6 +13,7 @@ export default function AllVehiclesPage() {
   const [vehicles, setVehicles] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [types, setTypes] = useState<any[]>([])
+  const [typeSortOrder, setTypeSortOrder] = useState<any>({}) // Map for sorting vehicles
 
   // QR Modal State
   const [showQr, setShowQr] = useState<any>(null)
@@ -37,41 +38,55 @@ export default function AllVehiclesPage() {
         .order('vehicle_uid', { ascending: true })
       
       // 2. Get Secret Data (Auto-Email/Pass from Raw Table)
-      // We need this because the View might not have the new columns yet
       const { data: secretData } = await supabase
         .from('vehicles')
         .select('id, auto_email, auto_password')
 
-      // 3. Get Types for Filter
+      // 3. Get Types for Filter (SORTED BY CUSTOM ORDER)
       const { data: tData } = await supabase
         .from('vehicle_types')
         .select('*')
-        .order('name', { ascending: true })
+        .order('sort_order', { ascending: true }) // <--- UPDATED: Uses sort_order
 
       if (viewData && secretData) {
           // Merge the visual data with the secret data
           const merged = viewData.map(v => {
               const secret = secretData.find(s => s.id === v.id)
-              return { ...v, ...secret } // Combine them
+              return { ...v, ...secret } 
           })
           setVehicles(merged)
       }
       
-      if (tData) setTypes(tData)
+      if (tData) {
+          setTypes(tData)
+          // Create a map for sorting vehicles later: { 'APC': 1, 'LAV': 5 }
+          const orderMap: any = {}
+          tData.forEach((t: any) => { orderMap[t.name] = t.sort_order })
+          setTypeSortOrder(orderMap)
+      }
       setLoading(false)
     }
     fetchData()
   }, [])
 
-  // --- FILTER LOGIC ---
-  const filteredVehicles = vehicles.filter(v => {
-    const matchesSearch = (v.vehicle_uid || '').toLowerCase().includes(search.toLowerCase())
-    const matchesType = filterType === 'All' || v.vehicle_type_name === filterType
-    const matchesTob = filterTob === 'All' || v.tob === filterTob
-    const matchesStatus = filterStatus === 'All' || v.operational_category === filterStatus
-    
-    return matchesSearch && matchesType && matchesTob && matchesStatus
-  })
+  // --- FILTER & SORT LOGIC ---
+  const filteredVehicles = vehicles
+    .filter(v => {
+        const matchesSearch = (v.vehicle_uid || '').toLowerCase().includes(search.toLowerCase())
+        const matchesType = filterType === 'All' || v.vehicle_type_name === filterType
+        const matchesTob = filterTob === 'All' || v.tob === filterTob
+        const matchesStatus = filterStatus === 'All' || v.operational_category === filterStatus
+        return matchesSearch && matchesType && matchesTob && matchesStatus
+    })
+    .sort((a, b) => {
+        // PRIMARY SORT: By Vehicle Type Chronology
+        const orderA = typeSortOrder[a.vehicle_type_name] || 99
+        const orderB = typeSortOrder[b.vehicle_type_name] || 99
+        if (orderA !== orderB) return orderA - orderB
+
+        // SECONDARY SORT: By Vehicle ID
+        return a.vehicle_uid.localeCompare(b.vehicle_uid)
+    })
 
   // --- HELPER FOR STATUS COLORS ---
   const getStatusColor = (status: string) => {
@@ -118,7 +133,7 @@ export default function AllVehiclesPage() {
             />
         </div>
 
-        {/* Filter: Type */}
+        {/* Filter: Type (SORTED) */}
         <div className="relative">
              <Car className="absolute left-3 top-3 w-5 h-5 text-gray-400" />
              <select 

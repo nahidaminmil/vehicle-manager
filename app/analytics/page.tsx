@@ -2,7 +2,7 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
-import { ArrowLeft, BarChart3, MapPin } from 'lucide-react' // <--- FIXED: Added MapPin
+import { ArrowLeft, BarChart3, MapPin } from 'lucide-react'
 
 export default function AnalyticsPage() {
   const router = useRouter()
@@ -12,20 +12,31 @@ export default function AnalyticsPage() {
 
   useEffect(() => {
     async function fetchStats() {
+      // 1. Fetch Types to get the Sort Order (Name -> Order Map)
+      const { data: typeData } = await supabase.from('vehicle_types').select('name, sort_order')
+      const sortMap: any = {}
+      if (typeData) {
+          typeData.forEach((t: any) => { sortMap[t.name] = t.sort_order })
+      }
+
+      // 2. Fetch Vehicle Data (Only existing vehicles)
       const { data: vehicles, error } = await supabase
         .from('vehicle_dashboard_view')
         .select('*')
 
       if (error) console.error(error)
-      else processData(vehicles || [])
+      else processData(vehicles || [], sortMap)
       setLoading(false)
     }
     fetchStats()
   }, [])
 
-  function processData(vehicles: any[]) {
+  function processData(vehicles: any[], sortMap: any) {
     const typeGroups: any = {}
 
+    // We iterate over actual VEHICLES. 
+    // If a type has 0 vehicles, it won't be in this list, so it won't be created.
+    // This preserves your "Hide Empty Types" functionality.
     vehicles.forEach(v => {
       const typeName = v.vehicle_type_name || 'Unknown'
       const tob = v.tob || 'Unknown'
@@ -36,11 +47,11 @@ export default function AnalyticsPage() {
       if (!typeGroups[typeName]) {
         typeGroups[typeName] = {
           name: typeName,
+          // Look up the order from our map. Default to 99 if unknown.
+          order: sortMap[typeName] !== undefined ? sortMap[typeName] : 99, 
           total: 0,
-          // Global Counts
           status: { active: 0, inactive: 0, maintenance: 0 },
           opCat: { fmc: 0, degraded: 0, nmc: 0 },
-          // TOB Breakdown
           tobs: {}
         }
         // Initialize specific TOBs
@@ -56,12 +67,10 @@ export default function AnalyticsPage() {
       const g = typeGroups[typeName]
       g.total++
       
-      // Count Status
       if (status === 'Active') g.status.active++
       else if (status === 'Inactive') g.status.inactive++
       else if (status === 'Maintenance') g.status.maintenance++
 
-      // Count Op Category
       if (opCat === 'Fully Mission Capable') g.opCat.fmc++
       else if (opCat === 'Degraded') g.opCat.degraded++
       else if (opCat === 'Non-Mission Capable') g.opCat.nmc++
@@ -76,19 +85,20 @@ export default function AnalyticsPage() {
       
       const t = g.tobs[tob]
       
-      // TOB Status
       if (status === 'Active') t.status.active++
       else if (status === 'Inactive') t.status.inactive++
       else if (status === 'Maintenance') t.status.maintenance++
 
-      // TOB Op Category
       if (opCat === 'Fully Mission Capable') t.opCat.fmc++
       else if (opCat === 'Degraded') t.opCat.degraded++
       else if (opCat === 'Non-Mission Capable') t.opCat.nmc++
     })
 
-    // Sort alphabetically by type name
-    setStats(Object.values(typeGroups).sort((a: any, b: any) => a.name.localeCompare(b.name)))
+    // SORT BY DATABASE ORDER
+    // We convert the object to an array and sort based on the 'order' property we added.
+    const sortedStats = Object.values(typeGroups).sort((a: any, b: any) => a.order - b.order)
+    
+    setStats(sortedStats)
   }
 
   if (loading) return <div className="p-8 font-bold text-gray-800">Loading Fleet Intelligence...</div>
@@ -121,14 +131,14 @@ export default function AnalyticsPage() {
               {/* 2-ROW SUMMARY BUTTONS */}
               <div className="flex flex-col gap-2 items-start lg:items-end w-full lg:w-auto">
                   
-                  {/* ROW 1: STATUS (Active, Inactive, Maint) */}
+                  {/* ROW 1: STATUS */}
                   <div className="flex gap-2 w-full lg:w-auto">
                       <SummaryBadge label="ACTIVE" value={typeStat.status.active} color="bg-green-100 text-green-800 border-green-200" />
                       <SummaryBadge label="INACTIVE" value={typeStat.status.inactive} color="bg-red-100 text-red-800 border-red-200" />
                       <SummaryBadge label="MAINT" value={typeStat.status.maintenance} color="bg-orange-100 text-orange-800 border-orange-200" />
                   </div>
 
-                  {/* ROW 2: READINESS (FMC, Degrad, NMC) */}
+                  {/* ROW 2: READINESS */}
                   <div className="flex gap-2 w-full lg:w-auto">
                       <SummaryBadge label="FMC" value={typeStat.opCat.fmc} color="bg-green-100 text-green-800 border-green-200" />
                       <SummaryBadge label="DEGRAD" value={typeStat.opCat.degraded} color="bg-yellow-100 text-yellow-800 border-yellow-200" />
@@ -144,22 +154,18 @@ export default function AnalyticsPage() {
                 <thead>
                   <tr className="bg-gray-100 text-gray-500 uppercase text-[10px] font-extrabold tracking-wider border-b border-gray-200">
                     <th className="px-4 py-3 text-left">Location</th>
-                    {/* GROUP HEADER: STATUS */}
                     <th colSpan={3} className="px-2 py-3 text-center bg-blue-50/50 border-l border-r border-gray-200 text-blue-800">
                         Vehicle Status
                     </th>
-                    {/* GROUP HEADER: READINESS */}
                     <th colSpan={3} className="px-2 py-3 text-center bg-purple-50/50 text-purple-800">
                         Operational Category
                     </th>
                   </tr>
                   <tr className="bg-gray-50 text-gray-700 font-bold border-b border-gray-200 text-[10px] uppercase">
                     <th className="px-4 py-2">TOB</th>
-                    {/* Status Sub-headers */}
                     <th className="px-2 py-2 text-center text-green-700 border-l border-gray-200">Active</th>
                     <th className="px-2 py-2 text-center text-red-700">Inactive</th>
                     <th className="px-2 py-2 text-center text-orange-700 border-r border-gray-200">Maint</th>
-                    {/* Readiness Sub-headers */}
                     <th className="px-2 py-2 text-center text-green-700">FMC</th>
                     <th className="px-2 py-2 text-center text-yellow-700">Degrad</th>
                     <th className="px-2 py-2 text-center text-red-700">NMC</th>
@@ -174,7 +180,6 @@ export default function AnalyticsPage() {
                             <MapPin className="w-3 h-3 mr-1.5 text-gray-400" /> {tob}
                         </td>
                         
-                        {/* STATUS COLUMNS */}
                         <td className="px-2 py-3 text-center font-bold text-green-700 border-l border-gray-100 bg-green-50/30">
                             {data.status.active || '-'}
                         </td>
@@ -185,7 +190,6 @@ export default function AnalyticsPage() {
                             {data.status.maintenance || '-'}
                         </td>
 
-                        {/* READINESS COLUMNS */}
                         <td className="px-2 py-3 text-center font-bold text-green-700">
                             {data.opCat.fmc || '-'}
                         </td>

@@ -35,9 +35,12 @@ export default function StatisticsPage() {
         }
     }
 
-    // 2. Fetch Vehicle Types (Columns)
-    const { data: typeData } = await supabase.from('vehicle_types').select('*').order('name')
-    setTypes(typeData || [])
+    // 2. Fetch Vehicle Types (SORTED BY CUSTOM CHRONOLOGY)
+    // We fetch ALL types first, then filter out the empty ones later
+    const { data: typeDataRaw } = await supabase
+      .from('vehicle_types')
+      .select('*')
+      .order('sort_order', { ascending: true }) // <--- UPDATED: Uses your custom order
 
     // 3. Fetch All Vehicles (To Count)
     const { data: vehicleData } = await supabase.from('vehicles').select('tob, vehicle_type_id')
@@ -54,7 +57,7 @@ export default function StatisticsPage() {
     const stats = tobList.map(tob => {
         const row: any = { tob_name: tob, total: 0 }
         
-        typeData?.forEach((t: any) => {
+        typeDataRaw?.forEach((t: any) => {
             // Count matching vehicles
             const count = vehicleData?.filter(v => v.tob === tob && v.vehicle_type_id === t.id).length || 0
             row[t.id] = count
@@ -63,6 +66,14 @@ export default function StatisticsPage() {
         return row
     })
     
+    // 6. FILTER EMPTY COLUMNS (Preserve your existing functionality)
+    // We check if a type has at least 1 vehicle in ANY location. If not, we hide the column.
+    const activeTypes = typeDataRaw?.filter((t: any) => {
+        const totalForThisType = stats.reduce((sum, row) => sum + (row[t.id] || 0), 0)
+        return totalForThisType > 0
+    }) || []
+
+    setTypes(activeTypes) // Only set the types that actually exist
     setMatrix(stats)
     setLoading(false)
   }
