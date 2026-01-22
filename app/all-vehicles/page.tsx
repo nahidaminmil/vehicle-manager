@@ -13,7 +13,10 @@ export default function AllVehiclesPage() {
   const [vehicles, setVehicles] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [types, setTypes] = useState<any[]>([])
-  const [typeSortOrder, setTypeSortOrder] = useState<any>({}) // Map for sorting vehicles
+  const [typeSortOrder, setTypeSortOrder] = useState<any>({}) 
+
+  // --- DYNAMIC LOCATION STATE ---
+  const [tobList, setTobList] = useState<string[]>([]) // <--- NEW: Dynamic List
 
   // QR Modal State
   const [showQr, setShowQr] = useState<any>(null)
@@ -24,32 +27,34 @@ export default function AllVehiclesPage() {
   const [filterTob, setFilterTob] = useState('All')
   const [filterStatus, setFilterStatus] = useState('All')
 
-  // --- LISTS ---
-  const tobList = ['NDROMO', 'BAYOO', 'RHOO', 'DRODRO']
+  // --- STATIC LISTS ---
   const statusList = ['Fully Mission Capable', 'Degraded', 'Non-Mission Capable']
 
   // --- FETCH DATA ---
   useEffect(() => {
     async function fetchData() {
-      // 1. Get Visual Data (Images, etc. from your View)
+      // 1. Fetch Dynamic Locations (NEW)
+      const { data: locData } = await supabase.from('locations').select('name').order('sort_order')
+      if (locData) setTobList(locData.map((l: any) => l.name))
+
+      // 2. Get Visual Data
       const { data: viewData } = await supabase
         .from('vehicle_dashboard_view')
         .select('*')
         .order('vehicle_uid', { ascending: true })
       
-      // 2. Get Secret Data (Auto-Email/Pass from Raw Table)
+      // 3. Get Secret Data
       const { data: secretData } = await supabase
         .from('vehicles')
         .select('id, auto_email, auto_password')
 
-      // 3. Get Types for Filter (SORTED BY CUSTOM ORDER)
+      // 4. Get Types for Filter (Sorted)
       const { data: tData } = await supabase
         .from('vehicle_types')
         .select('*')
-        .order('sort_order', { ascending: true }) // <--- UPDATED: Uses sort_order
+        .order('sort_order', { ascending: true }) 
 
       if (viewData && secretData) {
-          // Merge the visual data with the secret data
           const merged = viewData.map(v => {
               const secret = secretData.find(s => s.id === v.id)
               return { ...v, ...secret } 
@@ -59,7 +64,6 @@ export default function AllVehiclesPage() {
       
       if (tData) {
           setTypes(tData)
-          // Create a map for sorting vehicles later: { 'APC': 1, 'LAV': 5 }
           const orderMap: any = {}
           tData.forEach((t: any) => { orderMap[t.name] = t.sort_order })
           setTypeSortOrder(orderMap)
@@ -133,7 +137,7 @@ export default function AllVehiclesPage() {
             />
         </div>
 
-        {/* Filter: Type (SORTED) */}
+        {/* Filter: Type */}
         <div className="relative">
              <Car className="absolute left-3 top-3 w-5 h-5 text-gray-400" />
              <select 
@@ -146,7 +150,7 @@ export default function AllVehiclesPage() {
              </select>
         </div>
 
-        {/* Filter: TOB */}
+        {/* UPDATED: Filter: TOB (Dynamic) */}
         <div className="relative">
              <MapPin className="absolute left-3 top-3 w-5 h-5 text-gray-400" />
              <select 
@@ -198,7 +202,6 @@ export default function AllVehiclesPage() {
                         <Link href={`/vehicle/${vehicle.id}`}>
                             <h2 className="text-xl font-black text-gray-900 group-hover:text-blue-700 transition-colors">{vehicle.vehicle_uid}</h2>
                         </Link>
-                        {/* QR CODE BUTTON (Only if auto-user exists) */}
                         {vehicle.auto_email && (
                             <button 
                                 onClick={(e) => {

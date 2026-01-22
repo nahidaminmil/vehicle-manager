@@ -14,8 +14,8 @@ export default function StatisticsPage() {
   const [remarks, setRemarks] = useState<any>({}) 
   const [canEdit, setCanEdit] = useState(false)   
   
-  // Hardcoded TOB list to ensure order and existence
-  const tobList = ['NDROMO', 'BAYOO', 'RHOO', 'DRODRO'] 
+  // --- DYNAMIC TOB LIST ---
+  const [tobList, setTobList] = useState<string[]>([]) // <--- NEW: Dynamic List
 
   useEffect(() => {
     fetchData()
@@ -28,24 +28,27 @@ export default function StatisticsPage() {
         const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single()
         
         // PERMISSION LOGIC:
-        // 'admin' & 'super_admin' = TRUE (Can Edit)
-        // 'tob_admin' & others = FALSE (Read Only)
         if (profile && (profile.role === 'admin' || profile.role === 'super_admin')) {
             setCanEdit(true)
         }
     }
 
-    // 2. Fetch Vehicle Types (SORTED BY CUSTOM CHRONOLOGY)
-    // We fetch ALL types first, then filter out the empty ones later
+    // 2. FETCH DYNAMIC LOCATIONS (NEW STEP)
+    const { data: locData } = await supabase.from('locations').select('name').order('sort_order')
+    // We use a local variable for calculation to ensure we have the data immediately
+    const fetchedLocations = locData ? locData.map((l: any) => l.name) : []
+    setTobList(fetchedLocations)
+
+    // 3. Fetch Vehicle Types (SORTED BY CUSTOM CHRONOLOGY)
     const { data: typeDataRaw } = await supabase
       .from('vehicle_types')
       .select('*')
-      .order('sort_order', { ascending: true }) // <--- UPDATED: Uses your custom order
+      .order('sort_order', { ascending: true }) 
 
-    // 3. Fetch All Vehicles (To Count)
+    // 4. Fetch All Vehicles (To Count)
     const { data: vehicleData } = await supabase.from('vehicles').select('tob, vehicle_type_id')
 
-    // 4. Fetch Remarks
+    // 5. Fetch Remarks
     const { data: remarkData } = await supabase.from('tob_reports').select('*')
     const remarkMap: any = {}
     if (remarkData) {
@@ -53,8 +56,8 @@ export default function StatisticsPage() {
     }
     setRemarks(remarkMap)
 
-    // 5. CALCULATE THE MATRIX
-    const stats = tobList.map(tob => {
+    // 6. CALCULATE THE MATRIX (Using fetchedLocations)
+    const stats = fetchedLocations.map(tob => {
         const row: any = { tob_name: tob, total: 0 }
         
         typeDataRaw?.forEach((t: any) => {
@@ -66,14 +69,13 @@ export default function StatisticsPage() {
         return row
     })
     
-    // 6. FILTER EMPTY COLUMNS (Preserve your existing functionality)
-    // We check if a type has at least 1 vehicle in ANY location. If not, we hide the column.
+    // 7. FILTER EMPTY COLUMNS (Preserve your existing functionality)
     const activeTypes = typeDataRaw?.filter((t: any) => {
         const totalForThisType = stats.reduce((sum, row) => sum + (row[t.id] || 0), 0)
         return totalForThisType > 0
     }) || []
 
-    setTypes(activeTypes) // Only set the types that actually exist
+    setTypes(activeTypes) 
     setMatrix(stats)
     setLoading(false)
   }

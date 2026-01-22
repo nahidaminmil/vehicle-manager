@@ -23,6 +23,9 @@ export default function VehicleDetails() {
   const [loading, setLoading] = useState(true)
   const [userRole, setUserRole] = useState('') 
   
+  // --- DYNAMIC LISTS ---
+  const [tobList, setTobList] = useState<string[]>([]) // <--- NEW: Dynamic TOB List
+
   // --- MODALS ---
   const [showQr, setShowQr] = useState(false)
   const [viewImage, setViewImage] = useState<string | null>(null)
@@ -56,8 +59,7 @@ export default function VehicleDetails() {
   const [reporterUnId, setReporterUnId] = useState('')
   const [reporterPhotoFile, setReporterPhotoFile] = useState<File | null>(null)
 
-  // --- LISTS ---
-  const tobList = ['NDROMO', 'BAYOO', 'RHOO', 'DRODRO']
+  // --- STATIC LISTS ---
   const opCats = ['Fully Mission Capable', 'Degraded', 'Non-Mission Capable']
   const vehicleStatuses = ['Active', 'Inactive', 'Maintenance']
   
@@ -68,6 +70,10 @@ export default function VehicleDetails() {
         const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single()
         if(profile) setUserRole(profile.role)
     }
+
+    // 1. Fetch Dynamic Locations
+    const { data: locData } = await supabase.from('locations').select('name').order('sort_order')
+    if (locData) setTobList(locData.map((l: any) => l.name))
 
     const { data: vehicleRaw } = await supabase.from('vehicles').select('*').eq('id', id).single()
     const { data: vehicleView } = await supabase.from('vehicle_dashboard_view').select('*').eq('id', id).single()
@@ -96,7 +102,7 @@ export default function VehicleDetails() {
 
       setEditFormData({
         vehicle_uid: vehicleData.vehicle_uid || '',
-        tob: vehicleData.tob || 'NDROMO',
+        tob: vehicleData.tob || (locData && locData[0]?.name) || '', // Default to first available location if empty
         vehicle_type_id: vehicleData.vehicle_type_id || '', 
         mileage: vehicleData.mileage || 0,
         operational_category: vehicleData.operational_category || 'Fully Mission Capable',
@@ -171,18 +177,16 @@ export default function VehicleDetails() {
       if (error) alert(error.message); else fetchData()
   }
 
-  // --- SAVE PROFILE (SECTION 2 UPDATE) ---
+  // --- SAVE PROFILE ---
   async function saveProfile() {
-    // Validate UN ID Format
     const unIdRegex = /^M-\d{8}$/
     if (editFormData.updater_un_id && !unIdRegex.test(editFormData.updater_un_id)) {
         return alert("Updater UN ID must match format M-12345678")
     }
 
     setUploading(true)
-    let updaterPhotoUrl = vehicle.last_updated_by_photo // Keep old photo by default
+    let updaterPhotoUrl = vehicle.last_updated_by_photo 
 
-    // Upload new ID photo if selected
     if (updaterPhotoFile) {
         const blob = await resizeImage(updaterPhotoFile)
         const fileName = `updater_id_${vehicle.id}_${Date.now()}.jpg`
@@ -201,7 +205,6 @@ export default function VehicleDetails() {
         operational_category: editFormData.operational_category,
         status: editFormData.status,
         description: editFormData.description,
-        // Update Info
         last_updated_by_un_id: editFormData.updater_un_id,
         last_updated_by_photo: updaterPhotoUrl,
         updated_at: new Date().toISOString()
@@ -226,7 +229,7 @@ export default function VehicleDetails() {
       else { alert('Error: ' + result.error); setLoading(false) }
   }
 
-  // --- SUBMIT NEW LOG (SECTION 3 UPDATE) ---
+  // --- SUBMIT NEW LOG ---
   async function handleSubmitLog() {
     if (!remark) return alert('Please write a fault description.')
     
@@ -381,9 +384,20 @@ export default function VehicleDetails() {
         </div>
         
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {/* Standard Fields */}
             <div><label className="block text-xs font-extrabold text-gray-500 uppercase mb-1">Vehicle ID</label>{isEditing ? <input type="text" value={editFormData.vehicle_uid} onChange={(e) => setEditFormData({...editFormData, vehicle_uid: e.target.value})} className="w-full p-2 border-2 border-blue-200 rounded font-bold"/> : <p className="text-lg font-black text-gray-900">{vehicle.vehicle_uid}</p>}</div>
-            <div><label className="block text-xs font-extrabold text-gray-500 uppercase mb-1">Location (TOB)</label>{isEditing ? <select value={editFormData.tob} onChange={(e) => setEditFormData({...editFormData, tob: e.target.value})} className="w-full p-2 border-2 border-blue-200 rounded font-bold">{tobList.map(t => <option key={t} value={t}>{t}</option>)}</select> : <p className="text-lg font-bold text-gray-900">{vehicle.tob}</p>}</div>
+            
+            {/* UPDATED: DYNAMIC TOB DROPDOWN */}
+            <div>
+                <label className="block text-xs font-extrabold text-gray-500 uppercase mb-1">Location (TOB)</label>
+                {isEditing ? (
+                    <select value={editFormData.tob} onChange={(e) => setEditFormData({...editFormData, tob: e.target.value})} className="w-full p-2 border-2 border-blue-200 rounded font-bold">
+                        {tobList.map(t => <option key={t} value={t}>{t}</option>)}
+                    </select>
+                ) : (
+                    <p className="text-lg font-bold text-gray-900">{vehicle.tob}</p>
+                )}
+            </div>
+
             <div className="md:col-span-2"><label className="block text-xs font-extrabold text-gray-500 uppercase mb-1">Description</label>{isEditing ? <input type="text" value={editFormData.description} onChange={(e) => setEditFormData({...editFormData, description: e.target.value})} className="w-full p-2 border-2 border-blue-200 rounded font-bold" /> : <p className="text-lg font-bold text-gray-900">{vehicle.description || '---'}</p>}</div>
             <div><label className="block text-xs font-extrabold text-gray-500 uppercase mb-1">Type</label>{isEditing ? <select value={editFormData.vehicle_type_id} onChange={(e) => setEditFormData({...editFormData, vehicle_type_id: e.target.value})} className="w-full p-2 border-2 border-blue-200 rounded font-bold">{types.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}</select> : <p className="text-lg font-bold text-gray-900">{vehicle.vehicle_type_name}</p>}</div>
             <div><label className="block text-xs font-extrabold text-gray-500 uppercase mb-1">Mileage</label>{isEditing ? <input type="number" value={editFormData.mileage} onChange={(e) => setEditFormData({...editFormData, mileage: Number(e.target.value)})} className="w-full p-2 border-2 border-blue-200 rounded font-bold"/> : <p className="text-lg font-bold text-gray-900">{vehicle.mileage} km</p>}</div>

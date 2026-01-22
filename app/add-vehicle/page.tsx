@@ -2,7 +2,7 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase'
 import { useRouter } from 'next/navigation'
-import { createVehicleWithAutoUser } from '@/app/actions' // <--- This is the magic link to your Server Action
+import { createVehicleWithAutoUser } from '@/app/actions' // <--- KEEPS YOUR SERVER ACTION
 import { ArrowLeft, Save, Truck, Loader2 } from 'lucide-react'
 
 export default function AddVehicle() {
@@ -10,42 +10,53 @@ export default function AddVehicle() {
   const [loading, setLoading] = useState(false)
   const [types, setTypes] = useState<any[]>([])
 
+  // --- NEW: DYNAMIC LOCATIONS STATE ---
+  const [tobList, setTobList] = useState<string[]>([]) 
+
   // Form State
   const [formData, setFormData] = useState({
     vehicle_uid: '',
-    tob: 'NDROMO',
+    tob: '', // Will default to first DB location
     vehicle_type_id: '',
     operational_category: 'Fully Mission Capable',
     mileage: 0,
-    status: 'Active' // Default to Active for new vehicles
+    status: 'Active' 
   })
 
-  // Fixed Lists
-  const tobList = ['NDROMO', 'BAYOO', 'RHOO', 'DRODRO']
-
+  // --- FETCH DATA (TYPES & LOCATIONS) ---
   useEffect(() => {
-    async function getTypes() {
-      const { data } = await supabase.from('vehicle_types').select('*')
-      if (data) {
-          setTypes(data)
+    async function fetchSetupData() {
+      // 1. Fetch Types
+      const { data: tData } = await supabase.from('vehicle_types').select('*').order('sort_order', { ascending: true })
+      if (tData) {
+          setTypes(tData)
           // Auto-select first type if available
-          if(data.length > 0) setFormData(prev => ({...prev, vehicle_type_id: data[0].id}))
+          if(tData.length > 0) setFormData(prev => ({...prev, vehicle_type_id: tData[0].id}))
+      }
+
+      // 2. Fetch Locations (Dynamic from DB)
+      const { data: lData } = await supabase.from('locations').select('name').order('sort_order')
+      if (lData && lData.length > 0) {
+          const locNames = lData.map((l: any) => l.name)
+          setTobList(locNames)
+          // Default to first location
+          setFormData(prev => ({ ...prev, tob: locNames[0] }))
       }
     }
-    getTypes()
+    fetchSetupData()
   }, [])
 
   async function handleSubmit() {
-    if (!formData.vehicle_uid || !formData.vehicle_type_id) return alert('Please fill in Vehicle ID and Type')
+    if (!formData.vehicle_uid || !formData.vehicle_type_id || !formData.tob) return alert('Please fill in Vehicle ID, Type and Location')
     
     setLoading(true)
     
-    // CALL THE SERVER ACTION (This creates Vehicle + User + QR Data)
+    // CALL THE SERVER ACTION (Keeps your Auto-User logic intact)
     const result = await createVehicleWithAutoUser(formData)
 
     if (result.success) {
         alert('Vehicle AND User Account Created Successfully!')
-        router.push('/all-vehicles') // Go to list to see the new QR code
+        router.push('/all-vehicles') 
     } else {
         alert('Error: ' + result.error)
     }
@@ -54,7 +65,7 @@ export default function AddVehicle() {
 
   return (
     <div className="min-h-screen bg-gray-100 p-4 flex justify-center items-start pt-10">
-      <div className="bg-white p-8 rounded-lg shadow-lg w-full max-w-md">
+      <div className="bg-white p-8 rounded-lg shadow-lg w-full max-w-md border-t-8 border-blue-600">
         
         {/* Header */}
         <div className="flex items-center mb-6 border-b pb-4">
@@ -75,7 +86,7 @@ export default function AddVehicle() {
                     type="text" 
                     value={formData.vehicle_uid} 
                     onChange={e => setFormData({...formData, vehicle_uid: e.target.value.toUpperCase()})} 
-                    className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none font-bold uppercase" 
+                    className="w-full p-3 border-2 border-gray-200 rounded-lg focus:border-blue-500 outline-none font-bold uppercase" 
                     placeholder="UN-12345" 
                 />
             </div>
@@ -87,19 +98,22 @@ export default function AddVehicle() {
                     <select 
                         value={formData.vehicle_type_id} 
                         onChange={e => setFormData({...formData, vehicle_type_id: e.target.value})} 
-                        className="w-full p-3 border border-gray-300 rounded-lg bg-white"
+                        className="w-full p-3 border-2 border-gray-200 rounded-lg bg-white font-bold text-gray-800 outline-none focus:border-blue-500"
                     >
                         <option value="">Select...</option>
                         {types.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
                     </select>
                 </div>
+                
+                {/* DYNAMIC LOCATION DROPDOWN */}
                 <div>
                     <label className="block text-sm font-bold text-gray-700 uppercase mb-1">Location</label>
                     <select 
                         value={formData.tob} 
                         onChange={e => setFormData({...formData, tob: e.target.value})} 
-                        className="w-full p-3 border border-gray-300 rounded-lg bg-white"
+                        className="w-full p-3 border-2 border-gray-200 rounded-lg bg-white font-bold text-gray-800 outline-none focus:border-blue-500"
                     >
+                        {tobList.length === 0 && <option>Loading...</option>}
                         {tobList.map(t => <option key={t} value={t}>{t}</option>)}
                     </select>
                 </div>
@@ -112,25 +126,28 @@ export default function AddVehicle() {
                     type="number" 
                     value={formData.mileage} 
                     onChange={e => setFormData({...formData, mileage: parseInt(e.target.value) || 0})} 
-                    className="w-full p-3 border border-gray-300 rounded-lg font-bold" 
+                    className="w-full p-3 border-2 border-gray-200 rounded-lg font-bold text-gray-800 outline-none focus:border-blue-500" 
                 />
             </div>
 
             {/* AUTOMATION NOTICE */}
-            <div className="bg-blue-50 p-4 rounded-lg border border-blue-100">
-                <p className="text-xs font-bold text-blue-600 uppercase mb-1">AUTOMATION ACTIVE</p>
-                <p className="text-sm text-blue-800 font-medium leading-relaxed">
-                    A <strong>Vehicle User Account</strong> and <strong>QR Code</strong> will be automatically generated when you click save.
-                </p>
+            <div className="bg-blue-50 p-4 rounded-lg border border-blue-100 flex items-start">
+                <div className="mr-3 mt-1 text-blue-600"><Save className="w-5 h-5" /></div>
+                <div>
+                    <p className="text-xs font-bold text-blue-600 uppercase mb-1">AUTOMATION ACTIVE</p>
+                    <p className="text-sm text-blue-800 font-medium leading-relaxed">
+                        A <strong>Vehicle User Account</strong> and <strong>QR Code</strong> will be automatically generated upon saving.
+                    </p>
+                </div>
             </div>
 
             {/* Submit Button */}
             <button 
                 onClick={handleSubmit} 
                 disabled={loading} 
-                className="w-full bg-blue-700 hover:bg-blue-800 text-white font-bold py-4 rounded-lg shadow-md flex justify-center items-center mt-6 transition-all active:scale-95"
+                className="w-full bg-blue-700 hover:bg-blue-800 text-white font-bold py-4 rounded-lg shadow-lg flex justify-center items-center mt-6 transition-all active:scale-95"
             >
-                {loading ? <Loader2 className="animate-spin"/> : <><Save className="w-5 h-5 mr-2"/> Save & Create Auto-User</>}
+                {loading ? <Loader2 className="animate-spin"/> : "Save & Create Auto-User"}
             </button>
         </div>
       </div>
