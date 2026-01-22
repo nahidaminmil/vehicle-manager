@@ -67,12 +67,25 @@ export default function Dashboard() {
     return matchesText && matchesStatus
   })
 
-  // --- HELPER FOR BADGE COLORS ---
+  // --- 1. HELPER FOR STATUS COLORS ---
   const getStatusColor = (s: string) => {
       if (s === 'Active') return 'bg-green-100 text-green-800'
       if (s === 'Maintenance') return 'bg-orange-100 text-orange-800'
       if (s === 'Inactive') return 'bg-red-100 text-red-800'
-      return 'bg-gray-100 text-gray-800' // Default for new custom statuses
+      return 'bg-gray-100 text-gray-800' 
+  }
+
+  // --- 2. HELPER FOR OP CAT COLORS (NEW) ---
+  const getOpCatColor = (c: string) => {
+      const cat = (c || '').toLowerCase()
+      // Blue for Ready/FMC
+      if (cat.includes('fully') || cat.includes('fmc')) return 'bg-blue-100 text-blue-800'
+      // Brown/Amber for Degraded
+      if (cat.includes('degraded')) return 'bg-amber-200 text-amber-900' 
+      // Red for NMC
+      if (cat.includes('non') || cat.includes('nmc')) return 'bg-red-100 text-red-800'
+      
+      return 'bg-gray-100 text-gray-800'
   }
 
   if (loading) return <div className="min-h-screen flex items-center justify-center bg-gray-100"><div className="text-xl font-black text-gray-900">Loading Command Dashboard...</div></div>
@@ -198,8 +211,21 @@ export default function Dashboard() {
                   <td className="px-6 py-4 font-black text-gray-900 whitespace-nowrap text-lg">{vehicle.vehicle_uid}</td>
                   <td className="px-6 py-4 font-bold text-gray-600 whitespace-nowrap">{vehicle.vehicle_type_name || '---'}</td>
                   <td className="px-6 py-4 font-bold text-gray-600 whitespace-nowrap"><span className="flex items-center"><MapPin className="w-3 h-3 mr-1 opacity-50"/> {vehicle.tob || '---'}</span></td>
-                  <td className="px-6 py-4 whitespace-nowrap"><span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold uppercase tracking-wide ${getStatusColor(vehicle.status)}`}>{vehicle.status}</span></td>
-                  <td className="px-6 py-4 whitespace-nowrap"><span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold uppercase tracking-wide bg-blue-50 text-blue-800">{vehicle.operational_category}</span></td>
+                  
+                  {/* DYNAMIC STATUS BADGE */}
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold uppercase tracking-wide ${getStatusColor(vehicle.status)}`}>
+                        {vehicle.status}
+                    </span>
+                  </td>
+
+                  {/* DYNAMIC OP CAT BADGE (UPDATED COLORS) */}
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold uppercase tracking-wide ${getOpCatColor(vehicle.operational_category)}`}>
+                        {vehicle.operational_category}
+                    </span>
+                  </td>
+
                   <td className="px-6 py-4 text-right whitespace-nowrap"><Link href={`/vehicle/${vehicle.id}`} className="inline-block bg-white border-2 border-gray-200 group-hover:border-black text-black px-4 py-1.5 rounded-md font-bold text-xs uppercase tracking-wide transition-all">View</Link></td>
                 </tr>
               ))}
@@ -218,7 +244,10 @@ export default function Dashboard() {
                         <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">{vehicle.vehicle_type_name}</span>
                     </div>
                     <div className="flex flex-col items-end gap-1">
+                        {/* Status Badge */}
                         <span className={`px-2 py-0.5 rounded text-[10px] font-black uppercase ${getStatusColor(vehicle.status)}`}>{vehicle.status}</span>
+                        {/* Op Cat Badge */}
+                        <span className={`px-2 py-0.5 rounded text-[10px] font-black uppercase ${getOpCatColor(vehicle.operational_category)}`}>{vehicle.operational_category}</span>
                     </div>
                 </div>
                 <div className="flex items-center justify-between text-sm font-bold text-gray-600 bg-gray-50 p-2 rounded"><span className="flex items-center"><MapPin className="w-4 h-4 mr-1 text-gray-400"/> {vehicle.tob}</span></div>

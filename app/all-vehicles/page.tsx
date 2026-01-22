@@ -17,8 +17,8 @@ export default function AllVehiclesPage() {
 
   // --- DYNAMIC LISTS ---
   const [tobList, setTobList] = useState<string[]>([]) 
-  const [statusList, setStatusList] = useState<string[]>([]) // <--- NEW
-  const [opCatList, setOpCatList] = useState<string[]>([])   // <--- NEW
+  const [statusList, setStatusList] = useState<string[]>([]) 
+  const [opCatList, setOpCatList] = useState<string[]>([])   
 
   // QR Modal State
   const [showQr, setShowQr] = useState<any>(null)
@@ -27,8 +27,8 @@ export default function AllVehiclesPage() {
   const [search, setSearch] = useState('')
   const [filterType, setFilterType] = useState('All')
   const [filterTob, setFilterTob] = useState('All')
-  const [filterStatus, setFilterStatus] = useState('All') // Filters 'status' (Active/Inactive)
-  const [filterOpCat, setFilterOpCat] = useState('All')   // Filters 'operational_category' (FMC/NMC)
+  const [filterStatus, setFilterStatus] = useState('All')
+  const [filterOpCat, setFilterOpCat] = useState('All')   
 
   // --- FETCH DATA ---
   useEffect(() => {
@@ -100,11 +100,29 @@ export default function AllVehiclesPage() {
         return a.vehicle_uid.localeCompare(b.vehicle_uid)
     })
 
-  // --- HELPER FOR STATUS COLORS ---
+  // --- 1. HELPER FOR STATUS COLORS (Image Badge) ---
   const getStatusColor = (status: string) => {
-    if (status === 'Active') return 'bg-green-500 text-white border-green-600'
+    if (status === 'Active') return 'bg-green-600 text-white border-green-700'
+    if (status === 'Maintenance') return 'bg-orange-500 text-white border-orange-600'
     if (status === 'Inactive') return 'bg-red-600 text-white border-red-700'
     return 'bg-gray-500 text-white border-gray-600'
+  }
+
+  // --- 2. HELPER FOR OP CAT COLORS (Bottom Banner) ---
+  const getOpCatColor = (category: string) => {
+    const c = (category || '').toLowerCase()
+    
+    // Fully Mission Capable -> BLUE
+    if (c.includes('fully') || c.includes('fmc')) return 'bg-blue-100 text-blue-900 border-blue-200'
+    
+    // Degraded -> BROWN/AMBER
+    if (c.includes('degraded')) return 'bg-amber-100 text-amber-900 border-amber-200'
+    
+    // Non-Mission Capable -> RED
+    if (c.includes('non') || c.includes('nmc')) return 'bg-red-100 text-red-900 border-red-200'
+    
+    // Default
+    return 'bg-gray-100 text-gray-800 border-gray-200'
   }
 
   // --- AUTO LOGIN URL GENERATOR ---
@@ -245,8 +263,9 @@ export default function AllVehiclesPage() {
                          </div>
                     </div>
 
+                    {/* DYNAMIC OP CAT BANNER */}
                     <div className="mt-auto pt-2 border-t border-gray-100">
-                          <span className="block text-center text-xs font-black uppercase tracking-wide px-2 py-1.5 rounded bg-blue-50 text-blue-900 border border-blue-100">
+                          <span className={`block text-center text-xs font-black uppercase tracking-wide px-2 py-1.5 rounded border ${getOpCatColor(vehicle.operational_category)}`}>
                             {vehicle.operational_category || 'Unknown Status'}
                           </span>
                     </div>
