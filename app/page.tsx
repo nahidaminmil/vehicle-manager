@@ -4,7 +4,7 @@ import { supabase } from '@/lib/supabase'
 import { useRouter } from 'next/navigation'
 import { 
   Car, CheckCircle, XCircle, AlertTriangle, Plus, Search, 
-  BarChart3, Grid, LogOut, Users, Wrench, MapPin, Table 
+  BarChart3, Grid, LogOut, Users, Wrench, MapPin, Table, Settings 
 } from 'lucide-react'
 import Link from 'next/link'
 
@@ -64,7 +64,7 @@ export default function Dashboard() {
     router.refresh()
   }
 
-  // --- UPDATED STATS CALCULATION (Strictly based on 'status' column) ---
+  // --- STATS CALCULATION ---
   function calculateStats(data: any[]) {
     const total = data.length
     const active = data.filter(v => v.status === 'Active').length
@@ -75,7 +75,7 @@ export default function Dashboard() {
 
   const stats = calculateStats(vehicles)
   
-  // --- UPDATED FILTERING LOGIC ---
+  // --- FILTERING LOGIC ---
   const filteredVehicles = vehicles.filter(v => {
     // 1. Text Search Filter
     const matchesText = (v.vehicle_uid || '').toLowerCase().includes(filter.toLowerCase()) ||
@@ -137,9 +137,16 @@ export default function Dashboard() {
            )}
 
            {role === 'super_admin' && (
-                <Link href="/users" className="flex-1 md:flex-none flex items-center justify-center bg-purple-900 hover:bg-black text-white px-3 py-2 md:px-4 md:py-3 rounded-lg font-bold shadow-sm text-sm transition-colors">
-                    <Users className="w-4 h-4 md:w-5 md:h-5 mr-2" /> Users
-                </Link>
+                <>
+                    <Link href="/users" className="flex-1 md:flex-none flex items-center justify-center bg-purple-900 hover:bg-black text-white px-3 py-2 md:px-4 md:py-3 rounded-lg font-bold shadow-sm text-sm transition-colors">
+                        <Users className="w-4 h-4 md:w-5 md:h-5 mr-2" /> Users
+                    </Link>
+                    
+                    {/* NEW CONFIG BUTTON */}
+                    <Link href="/admin/settings" className="flex-1 md:flex-none flex items-center justify-center bg-gray-900 hover:bg-black text-white px-3 py-2 md:px-4 md:py-3 rounded-lg font-bold shadow-sm text-sm transition-colors">
+                        <Settings className="w-4 h-4 md:w-5 md:h-5 mr-2" /> Config
+                    </Link>
+                </>
            )}
 
            <Link href="/all-vehicles" className="flex-1 md:flex-none flex items-center justify-center bg-gray-800 hover:bg-black text-white px-3 py-2 md:px-4 md:py-3 rounded-lg font-bold shadow-sm text-sm transition-colors">
@@ -167,7 +174,7 @@ export default function Dashboard() {
         </div>
       )}
 
-      {/* STATS CARDS - CLICKABLE BUTTONS (UPDATED CATEGORIES) */}
+      {/* STATS CARDS */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4 mb-6 md:mb-8">
         <StatCard 
             title="Total Fleet" 
