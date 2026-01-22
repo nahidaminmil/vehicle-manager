@@ -2,7 +2,7 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
-import { ArrowLeft, Search, Car, MapPin, Activity, QrCode, X } from 'lucide-react'
+import { ArrowLeft, Search, Car, MapPin, Activity, QrCode, X, Filter } from 'lucide-react'
 import Link from 'next/link'
 import QRCode from "react-qr-code"
 
@@ -15,8 +15,10 @@ export default function AllVehiclesPage() {
   const [types, setTypes] = useState<any[]>([])
   const [typeSortOrder, setTypeSortOrder] = useState<any>({}) 
 
-  // --- DYNAMIC LOCATION STATE ---
-  const [tobList, setTobList] = useState<string[]>([]) // <--- NEW: Dynamic List
+  // --- DYNAMIC LISTS ---
+  const [tobList, setTobList] = useState<string[]>([]) 
+  const [statusList, setStatusList] = useState<string[]>([]) // <--- NEW
+  const [opCatList, setOpCatList] = useState<string[]>([])   // <--- NEW
 
   // QR Modal State
   const [showQr, setShowQr] = useState<any>(null)
@@ -25,17 +27,21 @@ export default function AllVehiclesPage() {
   const [search, setSearch] = useState('')
   const [filterType, setFilterType] = useState('All')
   const [filterTob, setFilterTob] = useState('All')
-  const [filterStatus, setFilterStatus] = useState('All')
-
-  // --- STATIC LISTS ---
-  const statusList = ['Fully Mission Capable', 'Degraded', 'Non-Mission Capable']
+  const [filterStatus, setFilterStatus] = useState('All') // Filters 'status' (Active/Inactive)
+  const [filterOpCat, setFilterOpCat] = useState('All')   // Filters 'operational_category' (FMC/NMC)
 
   // --- FETCH DATA ---
   useEffect(() => {
     async function fetchData() {
-      // 1. Fetch Dynamic Locations (NEW)
+      // 1. Fetch Dynamic Dropdowns
       const { data: locData } = await supabase.from('locations').select('name').order('sort_order')
       if (locData) setTobList(locData.map((l: any) => l.name))
+
+      const { data: sData } = await supabase.from('vehicle_statuses').select('name').order('sort_order')
+      if (sData) setStatusList(sData.map((s: any) => s.name))
+
+      const { data: oData } = await supabase.from('operational_categories').select('name').order('sort_order')
+      if (oData) setOpCatList(oData.map((o: any) => o.name))
 
       // 2. Get Visual Data
       const { data: viewData } = await supabase
@@ -79,8 +85,10 @@ export default function AllVehiclesPage() {
         const matchesSearch = (v.vehicle_uid || '').toLowerCase().includes(search.toLowerCase())
         const matchesType = filterType === 'All' || v.vehicle_type_name === filterType
         const matchesTob = filterTob === 'All' || v.tob === filterTob
-        const matchesStatus = filterStatus === 'All' || v.operational_category === filterStatus
-        return matchesSearch && matchesType && matchesTob && matchesStatus
+        const matchesStatus = filterStatus === 'All' || v.status === filterStatus
+        const matchesOpCat = filterOpCat === 'All' || v.operational_category === filterOpCat
+        
+        return matchesSearch && matchesType && matchesTob && matchesStatus && matchesOpCat
     })
     .sort((a, b) => {
         // PRIMARY SORT: By Vehicle Type Chronology
@@ -94,9 +102,9 @@ export default function AllVehiclesPage() {
 
   // --- HELPER FOR STATUS COLORS ---
   const getStatusColor = (status: string) => {
-    if (status === 'Fully Mission Capable') return 'bg-green-100 text-green-800 border-green-200'
-    if (status === 'Non-Mission Capable') return 'bg-red-100 text-red-800 border-red-200'
-    return 'bg-orange-100 text-orange-800 border-orange-200'
+    if (status === 'Active') return 'bg-green-500 text-white border-green-600'
+    if (status === 'Inactive') return 'bg-red-600 text-white border-red-700'
+    return 'bg-gray-500 text-white border-gray-600'
   }
 
   // --- AUTO LOGIN URL GENERATOR ---
@@ -123,10 +131,10 @@ export default function AllVehiclesPage() {
         </div>
       </div>
 
-      {/* FILTER BAR */}
-      <div className="bg-white p-4 rounded-xl shadow-md mb-8 border border-gray-200 grid grid-cols-1 md:grid-cols-4 gap-4">
+      {/* FILTER BAR (NOW WITH 4 DROPDOWNS) */}
+      <div className="bg-white p-4 rounded-xl shadow-md mb-8 border border-gray-200 grid grid-cols-1 md:grid-cols-5 gap-4">
         {/* Search */}
-        <div className="relative">
+        <div className="relative md:col-span-1">
             <Search className="absolute left-3 top-3 w-5 h-5 text-gray-400" />
             <input 
                 type="text" 
@@ -150,7 +158,7 @@ export default function AllVehiclesPage() {
              </select>
         </div>
 
-        {/* UPDATED: Filter: TOB (Dynamic) */}
+        {/* Filter: Location */}
         <div className="relative">
              <MapPin className="absolute left-3 top-3 w-5 h-5 text-gray-400" />
              <select 
@@ -171,8 +179,21 @@ export default function AllVehiclesPage() {
                 onChange={(e) => setFilterStatus(e.target.value)}
                 className="w-full pl-10 p-2.5 border-2 border-gray-200 rounded-lg font-bold text-gray-700 outline-none focus:border-blue-500 cursor-pointer appearance-none bg-white"
              >
-                <option value="All">All Op Status</option>
+                <option value="All">All Statuses</option>
                 {statusList.map(s => <option key={s} value={s}>{s}</option>)}
+             </select>
+        </div>
+
+        {/* Filter: Op Category */}
+        <div className="relative">
+             <Filter className="absolute left-3 top-3 w-5 h-5 text-gray-400" />
+             <select 
+                value={filterOpCat} 
+                onChange={(e) => setFilterOpCat(e.target.value)}
+                className="w-full pl-10 p-2.5 border-2 border-gray-200 rounded-lg font-bold text-gray-700 outline-none focus:border-blue-500 cursor-pointer appearance-none bg-white"
+             >
+                <option value="All">All Op Cats</option>
+                {opCatList.map(o => <option key={o} value={o}>{o}</option>)}
              </select>
         </div>
       </div>
@@ -190,8 +211,8 @@ export default function AllVehiclesPage() {
                         className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
                     />
                     <div className="absolute top-2 right-2">
-                        <span className={`text-[10px] uppercase font-black px-2 py-1 rounded shadow-sm border ${vehicle.status === 'Active' ? 'bg-green-500 text-white border-green-600' : 'bg-red-600 text-white border-red-700'}`}>
-                            {vehicle.status === 'Active' ? 'Active' : 'Inactive'}
+                        <span className={`text-[10px] uppercase font-black px-2 py-1 rounded shadow-sm border ${getStatusColor(vehicle.status)}`}>
+                            {vehicle.status}
                         </span>
                     </div>
                 </Link>
@@ -225,7 +246,7 @@ export default function AllVehiclesPage() {
                     </div>
 
                     <div className="mt-auto pt-2 border-t border-gray-100">
-                          <span className={`block text-center text-xs font-black uppercase tracking-wide px-2 py-1.5 rounded ${getStatusColor(vehicle.operational_category)}`}>
+                          <span className="block text-center text-xs font-black uppercase tracking-wide px-2 py-1.5 rounded bg-blue-50 text-blue-900 border border-blue-100">
                             {vehicle.operational_category || 'Unknown Status'}
                           </span>
                     </div>
@@ -269,12 +290,12 @@ export default function AllVehiclesPage() {
                   <div className="bg-gray-100 p-3 rounded text-left mb-4 border border-gray-200">
                       <p className="text-[10px] uppercase font-bold text-gray-400 mb-1">Backup Login Details</p>
                       <div className="flex justify-between">
-                         <span className="text-xs font-bold text-gray-500">User:</span>
-                         <span className="text-xs font-mono text-gray-900 select-all">{showQr.auto_email}</span>
+                          <span className="text-xs font-bold text-gray-500">User:</span>
+                          <span className="text-xs font-mono text-gray-900 select-all">{showQr.auto_email}</span>
                       </div>
                       <div className="flex justify-between">
-                         <span className="text-xs font-bold text-gray-500">Pass:</span>
-                         <span className="text-xs font-mono text-gray-900 select-all">{showQr.auto_password}</span>
+                          <span className="text-xs font-bold text-gray-500">Pass:</span>
+                          <span className="text-xs font-mono text-gray-900 select-all">{showQr.auto_password}</span>
                       </div>
                   </div>
               </div>

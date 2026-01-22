@@ -2,7 +2,7 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase'
 import { useRouter } from 'next/navigation'
-import { createVehicleWithAutoUser } from '@/app/actions' // <--- KEEPS YOUR SERVER ACTION
+import { createVehicleWithAutoUser } from '@/app/actions' 
 import { ArrowLeft, Save, Truck, Loader2 } from 'lucide-react'
 
 export default function AddVehicle() {
@@ -10,37 +10,53 @@ export default function AddVehicle() {
   const [loading, setLoading] = useState(false)
   const [types, setTypes] = useState<any[]>([])
 
-  // --- NEW: DYNAMIC LOCATIONS STATE ---
+  // --- DYNAMIC LISTS STATE ---
   const [tobList, setTobList] = useState<string[]>([]) 
+  const [statusList, setStatusList] = useState<string[]>([]) // <--- NEW
+  const [opCatList, setOpCatList] = useState<string[]>([])   // <--- NEW
 
   // Form State
   const [formData, setFormData] = useState({
     vehicle_uid: '',
-    tob: '', // Will default to first DB location
+    tob: '', 
     vehicle_type_id: '',
-    operational_category: 'Fully Mission Capable',
+    operational_category: '', 
     mileage: 0,
-    status: 'Active' 
+    status: '' 
   })
 
-  // --- FETCH DATA (TYPES & LOCATIONS) ---
+  // --- FETCH DATA ---
   useEffect(() => {
     async function fetchSetupData() {
       // 1. Fetch Types
       const { data: tData } = await supabase.from('vehicle_types').select('*').order('sort_order', { ascending: true })
       if (tData) {
           setTypes(tData)
-          // Auto-select first type if available
           if(tData.length > 0) setFormData(prev => ({...prev, vehicle_type_id: tData[0].id}))
       }
 
-      // 2. Fetch Locations (Dynamic from DB)
+      // 2. Fetch Locations
       const { data: lData } = await supabase.from('locations').select('name').order('sort_order')
       if (lData && lData.length > 0) {
-          const locNames = lData.map((l: any) => l.name)
-          setTobList(locNames)
-          // Default to first location
-          setFormData(prev => ({ ...prev, tob: locNames[0] }))
+          const locs = lData.map((l: any) => l.name)
+          setTobList(locs)
+          setFormData(prev => ({ ...prev, tob: locs[0] }))
+      }
+
+      // 3. Fetch Statuses (Dynamic)
+      const { data: sData } = await supabase.from('vehicle_statuses').select('name').order('sort_order')
+      if (sData && sData.length > 0) {
+          const stats = sData.map((s: any) => s.name)
+          setStatusList(stats)
+          setFormData(prev => ({ ...prev, status: stats[0] })) // Default to first (e.g. Active)
+      }
+
+      // 4. Fetch Op Categories (Dynamic)
+      const { data: oData } = await supabase.from('operational_categories').select('name').order('sort_order')
+      if (oData && oData.length > 0) {
+          const ops = oData.map((o: any) => o.name)
+          setOpCatList(ops)
+          setFormData(prev => ({ ...prev, operational_category: ops[0] })) // Default to first (e.g. FMC)
       }
     }
     fetchSetupData()
@@ -51,7 +67,6 @@ export default function AddVehicle() {
     
     setLoading(true)
     
-    // CALL THE SERVER ACTION (Keeps your Auto-User logic intact)
     const result = await createVehicleWithAutoUser(formData)
 
     if (result.success) {
@@ -105,7 +120,6 @@ export default function AddVehicle() {
                     </select>
                 </div>
                 
-                {/* DYNAMIC LOCATION DROPDOWN */}
                 <div>
                     <label className="block text-sm font-bold text-gray-700 uppercase mb-1">Location</label>
                     <select 
@@ -119,7 +133,32 @@ export default function AddVehicle() {
                 </div>
             </div>
 
-            {/* 3. Mileage */}
+            {/* 3. Status & Op Category (NEW DYNAMIC DROPDOWNS) */}
+            <div className="grid grid-cols-2 gap-4">
+                <div>
+                    <label className="block text-sm font-bold text-gray-700 uppercase mb-1">Status</label>
+                    <select 
+                        value={formData.status} 
+                        onChange={e => setFormData({...formData, status: e.target.value})} 
+                        className="w-full p-3 border-2 border-gray-200 rounded-lg bg-white font-bold text-gray-800 outline-none focus:border-blue-500"
+                    >
+                        {statusList.map(s => <option key={s} value={s}>{s}</option>)}
+                    </select>
+                </div>
+                
+                <div>
+                    <label className="block text-sm font-bold text-gray-700 uppercase mb-1">Op. Category</label>
+                    <select 
+                        value={formData.operational_category} 
+                        onChange={e => setFormData({...formData, operational_category: e.target.value})} 
+                        className="w-full p-3 border-2 border-gray-200 rounded-lg bg-white font-bold text-gray-800 outline-none focus:border-blue-500"
+                    >
+                        {opCatList.map(o => <option key={o} value={o}>{o}</option>)}
+                    </select>
+                </div>
+            </div>
+
+            {/* 4. Mileage */}
             <div>
                 <label className="block text-sm font-bold text-gray-700 uppercase mb-1">Initial Mileage (km)</label>
                 <input 

@@ -7,7 +7,7 @@ import QRCode from "react-qr-code"
 import { 
   ArrowLeft, Camera, Wrench, Clock, Edit2, X, Save, Trash2, Plus, 
   ImageIcon, User, AlertOctagon, Minus, ArrowDown, LogOut, QrCode, 
-  AlertTriangle, CheckCircle, Maximize2, FileBadge, UploadCloud
+  AlertTriangle, CheckCircle, Maximize2, FileBadge
 } from 'lucide-react'
 
 export default function VehicleDetails() {
@@ -23,8 +23,10 @@ export default function VehicleDetails() {
   const [loading, setLoading] = useState(true)
   const [userRole, setUserRole] = useState('') 
   
-  // --- DYNAMIC LISTS ---
-  const [tobList, setTobList] = useState<string[]>([]) // <--- NEW: Dynamic TOB List
+  // --- DYNAMIC LISTS (ALL FROM DB NOW) ---
+  const [tobList, setTobList] = useState<string[]>([]) 
+  const [statusList, setStatusList] = useState<string[]>([]) // <--- NEW
+  const [opCatList, setOpCatList] = useState<string[]>([])   // <--- NEW
 
   // --- MODALS ---
   const [showQr, setShowQr] = useState(false)
@@ -58,10 +60,6 @@ export default function VehicleDetails() {
   // New Reporter Fields
   const [reporterUnId, setReporterUnId] = useState('')
   const [reporterPhotoFile, setReporterPhotoFile] = useState<File | null>(null)
-
-  // --- STATIC LISTS ---
-  const opCats = ['Fully Mission Capable', 'Degraded', 'Non-Mission Capable']
-  const vehicleStatuses = ['Active', 'Inactive', 'Maintenance']
   
   // --- FETCH DATA ---
   async function fetchData() {
@@ -71,10 +69,17 @@ export default function VehicleDetails() {
         if(profile) setUserRole(profile.role)
     }
 
-    // 1. Fetch Dynamic Locations
+    // 1. Fetch Dynamic Dropdown Lists
     const { data: locData } = await supabase.from('locations').select('name').order('sort_order')
     if (locData) setTobList(locData.map((l: any) => l.name))
 
+    const { data: statusData } = await supabase.from('vehicle_statuses').select('name').order('sort_order')
+    if (statusData) setStatusList(statusData.map((s: any) => s.name))
+
+    const { data: opData } = await supabase.from('operational_categories').select('name').order('sort_order')
+    if (opData) setOpCatList(opData.map((o: any) => o.name))
+
+    // 2. Fetch Vehicle Data
     const { data: vehicleRaw } = await supabase.from('vehicles').select('*').eq('id', id).single()
     const { data: vehicleView } = await supabase.from('vehicle_dashboard_view').select('*').eq('id', id).single()
     const vehicleData = { ...vehicleView, ...vehicleRaw }
@@ -102,11 +107,14 @@ export default function VehicleDetails() {
 
       setEditFormData({
         vehicle_uid: vehicleData.vehicle_uid || '',
-        tob: vehicleData.tob || (locData && locData[0]?.name) || '', // Default to first available location if empty
+        tob: vehicleData.tob || (locData && locData[0]?.name) || '',
         vehicle_type_id: vehicleData.vehicle_type_id || '', 
         mileage: vehicleData.mileage || 0,
-        operational_category: vehicleData.operational_category || 'Fully Mission Capable',
-        status: vehicleData.status || 'Active',
+        
+        // Defaults to first available option if current is invalid
+        operational_category: vehicleData.operational_category || (opData && opData[0]?.name) || '',
+        status: vehicleData.status || (statusData && statusData[0]?.name) || '',
+        
         description: vehicleData.description || '',
         updater_un_id: vehicleData.last_updated_by_un_id || ''
       })
@@ -164,7 +172,7 @@ export default function VehicleDetails() {
 
   async function deleteGalleryPhoto(pid: string) { if(confirm('Delete photo?')) { await supabase.from('vehicle_gallery').delete().eq('id', pid); fetchData() }}
 
-  // --- NEW: DELETE ID PHOTOS (SUPER ADMIN) ---
+  // --- DELETE ID PHOTOS (SUPER ADMIN) ---
   async function deleteIdentityIdPhoto() {
       if(!confirm('Delete the Updater ID Photo?')) return
       const { error } = await supabase.from('vehicles').update({ last_updated_by_photo: null }).eq('id', vehicle.id)
@@ -386,7 +394,6 @@ export default function VehicleDetails() {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div><label className="block text-xs font-extrabold text-gray-500 uppercase mb-1">Vehicle ID</label>{isEditing ? <input type="text" value={editFormData.vehicle_uid} onChange={(e) => setEditFormData({...editFormData, vehicle_uid: e.target.value})} className="w-full p-2 border-2 border-blue-200 rounded font-bold"/> : <p className="text-lg font-black text-gray-900">{vehicle.vehicle_uid}</p>}</div>
             
-            {/* UPDATED: DYNAMIC TOB DROPDOWN */}
             <div>
                 <label className="block text-xs font-extrabold text-gray-500 uppercase mb-1">Location (TOB)</label>
                 {isEditing ? (
@@ -401,8 +408,30 @@ export default function VehicleDetails() {
             <div className="md:col-span-2"><label className="block text-xs font-extrabold text-gray-500 uppercase mb-1">Description</label>{isEditing ? <input type="text" value={editFormData.description} onChange={(e) => setEditFormData({...editFormData, description: e.target.value})} className="w-full p-2 border-2 border-blue-200 rounded font-bold" /> : <p className="text-lg font-bold text-gray-900">{vehicle.description || '---'}</p>}</div>
             <div><label className="block text-xs font-extrabold text-gray-500 uppercase mb-1">Type</label>{isEditing ? <select value={editFormData.vehicle_type_id} onChange={(e) => setEditFormData({...editFormData, vehicle_type_id: e.target.value})} className="w-full p-2 border-2 border-blue-200 rounded font-bold">{types.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}</select> : <p className="text-lg font-bold text-gray-900">{vehicle.vehicle_type_name}</p>}</div>
             <div><label className="block text-xs font-extrabold text-gray-500 uppercase mb-1">Mileage</label>{isEditing ? <input type="number" value={editFormData.mileage} onChange={(e) => setEditFormData({...editFormData, mileage: Number(e.target.value)})} className="w-full p-2 border-2 border-blue-200 rounded font-bold"/> : <p className="text-lg font-bold text-gray-900">{vehicle.mileage} km</p>}</div>
-            <div><label className="block text-xs font-extrabold text-gray-500 uppercase mb-1">Status</label>{isEditing ? <select value={editFormData.status} onChange={(e) => setEditFormData({...editFormData, status: e.target.value})} className="w-full p-2 border-2 border-blue-200 rounded font-bold">{vehicleStatuses.map(s => <option key={s} value={s}>{s}</option>)}</select> : <span className={`px-3 py-1 text-sm font-black rounded-full inline-block ${vehicle.status === 'Active' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>{vehicle.status}</span>}</div>
-            <div className="md:col-span-2"><label className="block text-xs font-extrabold text-gray-500 uppercase mb-1">Op. Category</label>{isEditing ? <select value={editFormData.operational_category} onChange={(e) => setEditFormData({...editFormData, operational_category: e.target.value})} className="w-full p-2 border-2 border-blue-200 rounded font-bold">{opCats.map(c => <option key={c} value={c}>{c}</option>)}</select> : <span className={`px-3 py-1 text-sm font-black rounded-full inline-block ${vehicle.operational_category === 'Fully Mission Capable' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>{vehicle.operational_category}</span>}</div>
+            
+            {/* DYNAMIC STATUS DROPDOWN */}
+            <div>
+                <label className="block text-xs font-extrabold text-gray-500 uppercase mb-1">Status</label>
+                {isEditing ? (
+                    <select value={editFormData.status} onChange={(e) => setEditFormData({...editFormData, status: e.target.value})} className="w-full p-2 border-2 border-blue-200 rounded font-bold">
+                        {statusList.map(s => <option key={s} value={s}>{s}</option>)}
+                    </select>
+                ) : (
+                    <span className={`px-3 py-1 text-sm font-black rounded-full inline-block ${vehicle.status === 'Active' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>{vehicle.status}</span>
+                )}
+            </div>
+
+            {/* DYNAMIC OP CAT DROPDOWN */}
+            <div className="md:col-span-2">
+                <label className="block text-xs font-extrabold text-gray-500 uppercase mb-1">Op. Category</label>
+                {isEditing ? (
+                    <select value={editFormData.operational_category} onChange={(e) => setEditFormData({...editFormData, operational_category: e.target.value})} className="w-full p-2 border-2 border-blue-200 rounded font-bold">
+                        {opCatList.map(c => <option key={c} value={c}>{c}</option>)}
+                    </select>
+                ) : (
+                    <span className={`px-3 py-1 text-sm font-black rounded-full inline-block ${vehicle.operational_category === 'Fully Mission Capable' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>{vehicle.operational_category}</span>
+                )}
+            </div>
         
             {/* SUB-SECTION: LAST UPDATE */}
             <div className="md:col-span-2 mt-4 bg-gray-50 p-4 rounded-lg border border-gray-200">
