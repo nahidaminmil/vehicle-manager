@@ -158,6 +158,19 @@ export default function VehicleDetails() {
 
   async function deleteGalleryPhoto(pid: string) { if(confirm('Delete photo?')) { await supabase.from('vehicle_gallery').delete().eq('id', pid); fetchData() }}
 
+  // --- NEW: DELETE ID PHOTOS (SUPER ADMIN) ---
+  async function deleteIdentityIdPhoto() {
+      if(!confirm('Delete the Updater ID Photo?')) return
+      const { error } = await supabase.from('vehicles').update({ last_updated_by_photo: null }).eq('id', vehicle.id)
+      if (error) alert(error.message); else fetchData()
+  }
+
+  async function deleteLogReporterPhoto(logId: string) {
+      if(!confirm('Delete the Reporter ID Photo?')) return
+      const { error } = await supabase.from('maintenance_logs').update({ reported_by_photo: null }).eq('id', logId)
+      if (error) alert(error.message); else fetchData()
+  }
+
   // --- SAVE PROFILE (SECTION 2 UPDATE) ---
   async function saveProfile() {
     // Validate UN ID Format
@@ -311,6 +324,7 @@ export default function VehicleDetails() {
   if (!vehicle) return <div className="p-8 font-bold text-xl text-red-600">Vehicle not found</div>
 
   const isWorkshopAdmin = (userRole === 'workshop_admin' || userRole === 'super_admin')
+  const isSuperAdmin = (userRole === 'super_admin')
 
   return (
     <div className="min-h-screen bg-gray-100 p-4 pb-24">
@@ -411,7 +425,14 @@ export default function VehicleDetails() {
                                 <p className="text-sm font-black text-gray-900">{vehicle.last_updated_by_un_id || '---'}</p>
                             </div>
                             {vehicle.last_updated_by_photo && (
-                                <img src={vehicle.last_updated_by_photo} className="w-10 h-10 rounded border object-cover cursor-pointer hover:opacity-80" onClick={() => setViewImage(vehicle.last_updated_by_photo)} />
+                                <div className="relative group">
+                                    <img src={vehicle.last_updated_by_photo} className="w-10 h-10 rounded border object-cover cursor-pointer hover:opacity-80" onClick={() => setViewImage(vehicle.last_updated_by_photo)} />
+                                    {isSuperAdmin && (
+                                        <button onClick={deleteIdentityIdPhoto} className="absolute -top-2 -right-2 bg-red-600 text-white p-1 rounded-full opacity-0 group-hover:opacity-100 transition-opacity" title="Delete ID Photo">
+                                            <X className="w-3 h-3"/>
+                                        </button>
+                                    )}
+                                </div>
                             )}
                         </div>
                     )}
@@ -459,12 +480,25 @@ export default function VehicleDetails() {
                           </div>
                           <div>
                               <label className="text-[10px] font-bold text-gray-500 uppercase mb-1 block">Photo of UN ID</label>
-                              <label className="cursor-pointer w-full flex items-center justify-center p-2 border-2 border-dashed border-blue-300 rounded hover:bg-blue-100 bg-white transition-colors">
+                              <label className="cursor-pointer w-full flex items-center justify-center p-2 border-2 border-dashed border-blue-300 rounded hover:bg-blue-100 bg-white transition-colors relative">
                                   <Camera className="w-4 h-4 mr-2 text-blue-500"/>
                                   <span className={`text-xs font-bold truncate ${reporterPhotoFile ? 'text-green-600' : 'text-blue-500'}`}>
                                       {reporterPhotoFile ? "ID Photo Selected" : "Upload / Take Photo"}
                                   </span>
                                   <input type="file" accept="image/*" capture="environment" className="hidden" onChange={(e) => setReporterPhotoFile(e.target.files ? e.target.files[0] : null)} />
+                                  
+                                  {/* CLEAR BUTTON FOR FORM (Anyone) */}
+                                  {reporterPhotoFile && (
+                                      <button 
+                                        onClick={(e) => {
+                                            e.preventDefault(); e.stopPropagation();
+                                            setReporterPhotoFile(null);
+                                        }}
+                                        className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1 shadow-sm hover:bg-red-600"
+                                      >
+                                          <X className="w-3 h-3"/>
+                                      </button>
+                                  )}
                               </label>
                           </div>
                       </div>
@@ -532,13 +566,26 @@ export default function VehicleDetails() {
                           <div className="md:col-span-2"><p className="text-[10px] uppercase font-bold text-gray-400 mb-1">Other Notes</p>{isEditingThis ? <input type="text" value={editLogData.notes} onChange={e => setEditLogData({...editLogData, notes: e.target.value})} className="w-full p-1 border rounded text-sm font-bold"/> : <p className="font-bold text-sm text-gray-800">{log.notes || '---'}</p>}</div>
                     </div>
 
-                    {/* REPORTER INFO */}
+                    {/* REPORTER INFO (WITH DELETE BUTTON FOR SUPER ADMIN) */}
                     <div className="mb-4 bg-blue-50 p-3 rounded border border-blue-100 flex items-center justify-between">
                         <div>
                             <p className="text-[9px] font-black uppercase text-blue-400">Reported By</p>
                             <p className="text-sm font-bold text-blue-900">{log.reported_by_un_id || 'Unknown'}</p>
                         </div>
-                        {log.reported_by_photo && <img src={log.reported_by_photo} className="w-10 h-10 rounded border border-blue-200 cursor-pointer object-cover" onClick={() => setViewImage(log.reported_by_photo)} alt="Reporter ID" />}
+                        {log.reported_by_photo && (
+                            <div className="relative group">
+                                <img src={log.reported_by_photo} className="w-10 h-10 rounded border border-blue-200 cursor-pointer object-cover" onClick={() => setViewImage(log.reported_by_photo)} alt="Reporter ID" />
+                                {isSuperAdmin && (
+                                    <button 
+                                        onClick={(e) => { e.stopPropagation(); deleteLogReporterPhoto(log.id); }} 
+                                        className="absolute -top-2 -right-2 bg-red-600 text-white p-1 rounded-full opacity-0 group-hover:opacity-100 transition-opacity shadow-md" 
+                                        title="Delete Reporter Photo"
+                                    >
+                                        <X className="w-3 h-3"/>
+                                    </button>
+                                )}
+                            </div>
+                        )}
                     </div>
 
                     {isEditingThis && (
