@@ -55,7 +55,6 @@ export default function AnalyticsPage() {
       const status = v.status || 'Unknown'
       const opCat = v.operational_category || 'Unknown'
 
-      // Initialize Type Group if missing
       if (!typeGroups[typeName]) {
         typeGroups[typeName] = {
           name: typeName,
@@ -79,11 +78,9 @@ export default function AnalyticsPage() {
       const g = typeGroups[typeName]
       g.total++
       
-      // Global Counts
       if (g.status[status] !== undefined) g.status[status]++
       if (g.opCat[opCat] !== undefined) g.opCat[opCat]++
 
-      // TOB Counts
       if (g.tobs[tob]) {
           if (g.tobs[tob].status[status] !== undefined) g.tobs[tob].status[status]++
           if (g.tobs[tob].opCat[opCat] !== undefined) g.tobs[tob].opCat[opCat]++
@@ -94,27 +91,35 @@ export default function AnalyticsPage() {
     setStats(sortedStats)
   }
 
-  // --- SPECIFIC COLOR THEMES ---
-  const getColorTheme = (name: string) => {
+  // --- COLOR HELPERS ---
+  const getTheme = (name: string) => {
       const n = name.toLowerCase()
-      // Statuses
+      // BADGES (Darker borders/text)
       if (n === 'active') return 'bg-green-100 text-green-900 border-green-300'
       if (n === 'inactive') return 'bg-red-100 text-red-900 border-red-300'
       if (n === 'maintenance') return 'bg-orange-100 text-orange-900 border-orange-300'
-      
-      // Op Categories
       if (n.includes('fully') || n.includes('fmc')) return 'bg-blue-100 text-blue-900 border-blue-300'
       if (n.includes('non') || n.includes('nmc')) return 'bg-red-100 text-red-900 border-red-300'
-      if (n.includes('degraded')) return 'bg-amber-100 text-amber-900 border-amber-300' // Brown-ish/Amber
-      
-      // Default
+      if (n.includes('degraded')) return 'bg-amber-100 text-amber-900 border-amber-300'
       return 'bg-gray-100 text-gray-800 border-gray-200' 
+  }
+
+  // NEW: Table Cell Backgrounds (Lighter shades for full columns)
+  const getColumnColor = (name: string) => {
+      const n = name.toLowerCase()
+      if (n === 'active') return 'bg-green-50/70 border-green-100 text-green-900'
+      if (n === 'inactive') return 'bg-red-50/70 border-red-100 text-red-900'
+      if (n === 'maintenance') return 'bg-orange-50/70 border-orange-100 text-orange-900'
+      if (n.includes('fully') || n.includes('fmc')) return 'bg-blue-50/70 border-blue-100 text-blue-900'
+      if (n.includes('non') || n.includes('nmc')) return 'bg-red-50/70 border-red-100 text-red-900'
+      if (n.includes('degraded')) return 'bg-amber-50/70 border-amber-100 text-amber-900'
+      return 'bg-gray-50 border-gray-100 text-gray-600'
   }
 
   if (loading) return <div className="p-8 font-bold text-gray-800 text-xl flex items-center"><Activity className="animate-spin mr-3 text-blue-600"/> Loading Analytics...</div>
 
   return (
-    <div className="min-h-screen bg-slate-50 p-4 md:p-8">
+    <div className="min-h-screen bg-slate-100 p-4 md:p-8">
       
       {/* PAGE HEADER */}
       <div className="mb-8">
@@ -122,7 +127,7 @@ export default function AnalyticsPage() {
           <ArrowLeft className="w-5 h-5 mr-2" /> Back to Dashboard
         </button>
         <div className="flex items-center">
-            <BarChart3 className="w-8 h-8 mr-3 text-indigo-600" />
+            <BarChart3 className="w-8 h-8 mr-3 text-indigo-700" />
             <div>
                 <h1 className="text-3xl font-black text-slate-900 tracking-tight">FLEET ANALYTICS</h1>
                 <p className="text-slate-500 font-bold text-sm">Real-time Operational Readiness Matrix</p>
@@ -132,27 +137,32 @@ export default function AnalyticsPage() {
 
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-8">
         {stats.map((typeStat) => (
-          <div key={typeStat.name} className="bg-white rounded-xl shadow-lg border-t-8 border-indigo-600 overflow-hidden flex flex-col">
+          <div key={typeStat.name} className="bg-white rounded-xl shadow-lg border border-slate-200 overflow-hidden flex flex-col">
             
-            {/* HEADER SECTION */}
-            <div className="p-5 border-b border-gray-100">
-                {/* Title & Total */}
-                <div className="flex justify-between items-start mb-4">
-                    <h2 className="text-2xl font-black text-slate-900 uppercase flex items-center">
-                        <Layers className="w-6 h-6 mr-2 text-indigo-500"/> {typeStat.name}
+            {/* --- COLORED BANNER HEADER --- */}
+            <div className="bg-slate-800 p-5 text-white flex justify-between items-center relative overflow-hidden">
+                {/* Decorative overlay for banner effect */}
+                <div className="absolute top-0 right-0 w-32 h-32 bg-white/5 rounded-full -mr-10 -mt-10 blur-2xl"></div>
+                
+                <div className="z-10">
+                    <h2 className="text-2xl font-black uppercase flex items-center tracking-wide">
+                        <Layers className="w-6 h-6 mr-3 text-indigo-300"/> {typeStat.name}
                     </h2>
-                    <div className="text-right">
-                        <span className="block text-3xl font-black text-indigo-900">{typeStat.total}</span>
-                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Total Units</span>
-                    </div>
                 </div>
+                <div className="z-10 text-right">
+                    <span className="block text-3xl font-black">{typeStat.total}</span>
+                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Total Units</span>
+                </div>
+            </div>
 
+            {/* SUMMARY BADGES SECTION */}
+            <div className="p-5 border-b border-gray-100 bg-white">
                 {/* ROW 1: STATUSES */}
                 <div className="mb-3">
                     <p className="text-[10px] font-bold text-slate-400 uppercase mb-1">Vehicle Status</p>
                     <div className="flex flex-wrap gap-2">
                         {statusList.map(s => (
-                            <SummaryBadge key={s} label={s} value={typeStat.status[s]} theme={getColorTheme(s)} />
+                            <SummaryBadge key={s} label={s} value={typeStat.status[s]} theme={getTheme(s)} />
                         ))}
                     </div>
                 </div>
@@ -162,15 +172,15 @@ export default function AnalyticsPage() {
                     <p className="text-[10px] font-bold text-slate-400 uppercase mb-1">Operational Category</p>
                     <div className="flex flex-wrap gap-2">
                         {opCatList.map(o => (
-                            <SummaryBadge key={o} label={o} value={typeStat.opCat[o]} theme={getColorTheme(o)} />
+                            <SummaryBadge key={o} label={o} value={typeStat.opCat[o]} theme={getTheme(o)} />
                         ))}
                     </div>
                 </div>
             </div>
 
-            {/* DYNAMIC TABLE */}
+            {/* DYNAMIC COLORED TABLE */}
             <div className="overflow-x-auto">
-              <table className="w-full text-xs md:text-sm text-left">
+              <table className="w-full text-xs md:text-sm text-left border-collapse">
                 <thead>
                   {/* CATEGORY HEADERS */}
                   <tr className="bg-slate-50 text-slate-500 uppercase text-[9px] font-black tracking-widest border-b border-slate-200">
@@ -181,39 +191,38 @@ export default function AnalyticsPage() {
                   
                   {/* COLUMN HEADERS */}
                   <tr className="bg-white text-slate-600 font-bold border-b border-slate-200 text-[9px] md:text-[10px] uppercase">
-                    <th className="px-4 py-2 border-r border-slate-100">TOB</th>
-                    {statusList.map(s => <th key={s} className="px-2 py-2 text-center border-r border-slate-100 min-w-[50px]">{s}</th>)}
-                    {opCatList.map(o => <th key={o} className="px-2 py-2 text-center border-r border-slate-100 min-w-[50px]">{o}</th>)}
+                    <th className="px-4 py-2 border-r border-slate-200">TOB</th>
+                    {statusList.map(s => <th key={s} className={`px-2 py-2 text-center border-r border-gray-100 ${getColumnColor(s)}`}>{s}</th>)}
+                    {opCatList.map(o => <th key={o} className={`px-2 py-2 text-center border-r border-gray-100 ${getColumnColor(o)}`}>{o}</th>)}
                   </tr>
                 </thead>
                 
-                <tbody className="divide-y divide-slate-50">
+                <tbody className="divide-y divide-slate-100">
                   {tobList.map((tob, index) => {
                     const data = typeStat.tobs[tob] || { status: {}, opCat: {} }
-                    const isEven = index % 2 === 0
                     return (
-                      <tr key={tob} className={`${isEven ? 'bg-white' : 'bg-slate-50/30'} hover:bg-indigo-50/30 transition-colors`}>
+                      <tr key={tob} className="hover:bg-gray-50 transition-colors">
                         {/* Location Name */}
-                        <td className="px-4 py-3 font-bold text-slate-700 flex items-center border-r border-slate-100">
+                        <td className="px-4 py-3 font-bold text-slate-700 flex items-center border-r border-slate-200 bg-white">
                             <MapPin className="w-3 h-3 mr-1.5 text-slate-400" /> {tob}
                         </td>
                         
-                        {/* Status Columns */}
+                        {/* Status Columns (Colored) */}
                         {statusList.map(s => {
                             const val = data.status[s] || 0
                             return (
-                                <td key={s} className="px-2 py-3 text-center border-r border-slate-100 font-bold text-slate-600">
-                                    {val > 0 ? <span className="text-slate-900 font-black">{val}</span> : <span className="text-slate-300">-</span>}
+                                <td key={s} className={`px-2 py-3 text-center border-r border-white/50 font-bold ${getColumnColor(s)}`}>
+                                    {val > 0 ? <span className="text-black scale-110 inline-block">{val}</span> : <span className="opacity-30">-</span>}
                                 </td>
                             )
                         })}
 
-                        {/* OpCat Columns */}
+                        {/* OpCat Columns (Colored) */}
                         {opCatList.map(o => {
                             const val = data.opCat[o] || 0
                             return (
-                                <td key={o} className="px-2 py-3 text-center border-r border-slate-100 font-bold text-slate-600">
-                                    {val > 0 ? <span className="text-slate-900 font-black">{val}</span> : <span className="text-slate-300">-</span>}
+                                <td key={o} className={`px-2 py-3 text-center border-r border-white/50 font-bold ${getColumnColor(o)}`}>
+                                    {val > 0 ? <span className="text-black scale-110 inline-block">{val}</span> : <span className="opacity-30">-</span>}
                                 </td>
                             )
                         })}
