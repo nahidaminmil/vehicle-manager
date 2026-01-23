@@ -91,9 +91,8 @@ export default function AnalyticsPage() {
     setStats(sortedStats)
   }
 
-  // --- SMART COLOR GENERATOR (For Unknown Categories) ---
+  // --- SMART COLOR GENERATOR ---
   const generateColor = (str: string) => {
-      // Predefined palettes for known keywords
       const n = str.toLowerCase()
       
       // 1. STATUS MATCHES
@@ -106,7 +105,7 @@ export default function AnalyticsPage() {
       if (n.includes('non') || n.includes('nmc')) return { bg: 'bg-red-100', text: 'text-red-900', border: 'border-red-300', light: 'bg-red-50/50' }
       if (n.includes('degraded')) return { bg: 'bg-amber-100', text: 'text-amber-900', border: 'border-amber-300', light: 'bg-amber-50/50' }
 
-      // 3. DYNAMIC FALLBACK (Assigns consistent colors to new names based on length/char)
+      // 3. DYNAMIC FALLBACK
       const colors = [
           { bg: 'bg-violet-100', text: 'text-violet-900', border: 'border-violet-300', light: 'bg-violet-50/50' },
           { bg: 'bg-cyan-100', text: 'text-cyan-900', border: 'border-cyan-300', light: 'bg-cyan-50/50' },
@@ -186,16 +185,18 @@ export default function AnalyticsPage() {
                 </div>
             </div>
 
-            {/* --- STICKY TABLE (Organized & Mobile Friendly) --- */}
+            {/* --- STICKY TABLE --- */}
             <div className="overflow-x-auto relative">
               <table className="w-full text-xs md:text-sm text-left border-collapse">
                 <thead>
-                  <tr className="bg-slate-100 text-slate-500 uppercase text-[9px] font-black tracking-widest border-b border-slate-300">
-                    <th className="sticky left-0 z-20 bg-slate-100 px-4 py-2 text-left border-r border-slate-300 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)]">Location</th>
-                    <th colSpan={statusList.length} className="px-2 py-2 text-center bg-emerald-50/50 text-emerald-900 border-r-4 border-white">Status</th>
-                    <th colSpan={opCatList.length} className="px-2 py-2 text-center bg-blue-50/50 text-blue-900">Readiness</th>
+                  {/* Super Header - INCREASED FONT SIZE (text-xs to text-sm) */}
+                  <tr className="bg-slate-100 text-slate-600 uppercase text-xs md:text-sm font-black tracking-widest border-b border-slate-300">
+                    <th className="sticky left-0 z-20 bg-slate-100 px-4 py-3 text-left border-r border-slate-300 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)]">Location</th>
+                    <th colSpan={statusList.length} className="px-2 py-3 text-center bg-emerald-50/50 text-emerald-900 border-r-4 border-white">Status</th>
+                    <th colSpan={opCatList.length} className="px-2 py-3 text-center bg-blue-50/50 text-blue-900">Readiness</th>
                   </tr>
                   
+                  {/* Column Headers */}
                   <tr className="bg-white text-slate-600 font-bold border-b border-slate-200 text-[9px] md:text-[10px] uppercase">
                     <th className="sticky left-0 z-20 bg-white px-4 py-3 border-r border-slate-200 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)]">TOB Name</th>
                     {statusList.map((s, i) => {
