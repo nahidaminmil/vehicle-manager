@@ -2,7 +2,7 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
-import { ArrowLeft, BarChart3, MapPin, Layers, Activity, Info } from 'lucide-react'
+import { ArrowLeft, BarChart3, MapPin, Layers, Activity } from 'lucide-react'
 
 export default function AnalyticsPage() {
   const router = useRouter()
@@ -91,32 +91,30 @@ export default function AnalyticsPage() {
     setStats(sortedStats)
   }
 
-  // --- 1. BADGE THEME (Header) ---
-  const getBadgeTheme = (name: string) => {
-      const n = name.toLowerCase()
-      if (n === 'active') return 'bg-emerald-100 text-emerald-900 border-emerald-200' 
-      if (n === 'inactive') return 'bg-rose-100 text-rose-900 border-rose-200'
-      if (n === 'maintenance') return 'bg-orange-100 text-orange-900 border-orange-200'
+  // --- SMART COLOR GENERATOR (For Unknown Categories) ---
+  const generateColor = (str: string) => {
+      // Predefined palettes for known keywords
+      const n = str.toLowerCase()
       
-      if (n.includes('fully') || n.includes('fmc')) return 'bg-sky-100 text-sky-900 border-sky-200' 
-      if (n.includes('non') || n.includes('nmc')) return 'bg-red-100 text-red-900 border-red-200'   
-      if (n.includes('degraded')) return 'bg-amber-100 text-amber-900 border-amber-200'             
+      // 1. STATUS MATCHES
+      if (n === 'active') return { bg: 'bg-emerald-100', text: 'text-emerald-900', border: 'border-emerald-300', light: 'bg-emerald-50/50' }
+      if (n === 'inactive') return { bg: 'bg-rose-100', text: 'text-rose-900', border: 'border-rose-300', light: 'bg-rose-50/50' }
+      if (n === 'maintenance') return { bg: 'bg-orange-100', text: 'text-orange-900', border: 'border-orange-300', light: 'bg-orange-50/50' }
       
-      return 'bg-slate-100 text-slate-800 border-slate-200' 
-  }
+      // 2. OP CAT MATCHES
+      if (n.includes('fully') || n.includes('fmc')) return { bg: 'bg-blue-100', text: 'text-blue-900', border: 'border-blue-300', light: 'bg-blue-50/50' }
+      if (n.includes('non') || n.includes('nmc')) return { bg: 'bg-red-100', text: 'text-red-900', border: 'border-red-300', light: 'bg-red-50/50' }
+      if (n.includes('degraded')) return { bg: 'bg-amber-100', text: 'text-amber-900', border: 'border-amber-300', light: 'bg-amber-50/50' }
 
-  // --- 2. COLUMN THEME (Table) ---
-  const getColumnTheme = (name: string) => {
-      const n = name.toLowerCase()
-      if (n === 'active') return 'bg-emerald-50/50 text-emerald-900'
-      if (n === 'inactive') return 'bg-rose-50/50 text-rose-900'
-      if (n === 'maintenance') return 'bg-orange-50/50 text-orange-900'
-      
-      if (n.includes('fully') || n.includes('fmc')) return 'bg-sky-50/50 text-sky-900'
-      if (n.includes('non') || n.includes('nmc')) return 'bg-red-50/50 text-red-900'
-      if (n.includes('degraded')) return 'bg-amber-50/50 text-amber-900'
-      
-      return 'bg-slate-50 text-slate-600'
+      // 3. DYNAMIC FALLBACK (Assigns consistent colors to new names based on length/char)
+      const colors = [
+          { bg: 'bg-violet-100', text: 'text-violet-900', border: 'border-violet-300', light: 'bg-violet-50/50' },
+          { bg: 'bg-cyan-100', text: 'text-cyan-900', border: 'border-cyan-300', light: 'bg-cyan-50/50' },
+          { bg: 'bg-fuchsia-100', text: 'text-fuchsia-900', border: 'border-fuchsia-300', light: 'bg-fuchsia-50/50' },
+          { bg: 'bg-lime-100', text: 'text-lime-900', border: 'border-lime-300', light: 'bg-lime-50/50' },
+      ]
+      const index = str.length % colors.length
+      return colors[index]
   }
 
   if (loading) return <div className="p-8 font-bold text-gray-800 text-xl flex items-center"><Activity className="animate-spin mr-3 text-blue-600"/> Loading Analytics...</div>
@@ -144,10 +142,9 @@ export default function AnalyticsPage() {
         {stats.map((typeStat) => (
           <div key={typeStat.name} className="bg-white rounded-2xl shadow-xl border border-slate-200 overflow-hidden flex flex-col">
             
-            {/* --- CARD HEADER (Professional Dark Gradient) --- */}
+            {/* --- CARD HEADER --- */}
             <div className="bg-slate-900 p-4 md:p-6 text-white flex flex-col md:flex-row justify-between items-start md:items-center relative overflow-hidden">
                 <div className="absolute top-0 right-0 w-64 h-64 bg-white/5 rounded-full -mr-20 -mt-20 blur-3xl pointer-events-none"></div>
-                
                 <div className="z-10 flex items-center mb-4 md:mb-0">
                     <Layers className="w-6 h-6 mr-3 text-indigo-400"/>
                     <h2 className="text-xl md:text-2xl font-black uppercase tracking-wide">{typeStat.name}</h2>
@@ -161,16 +158,16 @@ export default function AnalyticsPage() {
             {/* --- ORGANIZED SUMMARY GRID --- */}
             <div className="p-4 md:p-6 bg-slate-50/50 border-b border-slate-200">
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                    
                     {/* Status Group */}
                     <div className="bg-white p-4 rounded-xl border border-slate-100 shadow-sm">
                         <p className="text-[10px] font-black text-slate-400 uppercase mb-3 flex items-center">
                             <span className="w-2 h-2 rounded-full bg-emerald-500 mr-2"></span> Vehicle Status Breakdown
                         </p>
-                        <div className="grid grid-cols-3 gap-2">
-                            {statusList.map(s => (
-                                <SummaryBadge key={s} label={s} value={typeStat.status[s]} theme={getBadgeTheme(s)} />
-                            ))}
+                        <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+                            {statusList.map(s => {
+                                const colors = generateColor(s)
+                                return <SummaryBadge key={s} label={s} value={typeStat.status[s]} colors={colors} />
+                            })}
                         </div>
                     </div>
 
@@ -179,65 +176,67 @@ export default function AnalyticsPage() {
                         <p className="text-[10px] font-black text-slate-400 uppercase mb-3 flex items-center">
                             <span className="w-2 h-2 rounded-full bg-blue-500 mr-2"></span> Readiness Breakdown
                         </p>
-                        <div className="grid grid-cols-3 gap-2">
-                            {opCatList.map(o => (
-                                <SummaryBadge key={o} label={o} value={typeStat.opCat[o]} theme={getBadgeTheme(o)} />
-                            ))}
+                        <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+                            {opCatList.map(o => {
+                                const colors = generateColor(o)
+                                return <SummaryBadge key={o} label={o} value={typeStat.opCat[o]} colors={colors} />
+                            })}
                         </div>
                     </div>
                 </div>
             </div>
 
-            {/* --- STICKY TABLE (The Fix for Disorganization) --- */}
+            {/* --- STICKY TABLE (Organized & Mobile Friendly) --- */}
             <div className="overflow-x-auto relative">
               <table className="w-full text-xs md:text-sm text-left border-collapse">
                 <thead>
-                  {/* Super Header */}
                   <tr className="bg-slate-100 text-slate-500 uppercase text-[9px] font-black tracking-widest border-b border-slate-300">
                     <th className="sticky left-0 z-20 bg-slate-100 px-4 py-2 text-left border-r border-slate-300 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)]">Location</th>
                     <th colSpan={statusList.length} className="px-2 py-2 text-center bg-emerald-50/50 text-emerald-900 border-r-4 border-white">Status</th>
                     <th colSpan={opCatList.length} className="px-2 py-2 text-center bg-blue-50/50 text-blue-900">Readiness</th>
                   </tr>
                   
-                  {/* Column Headers */}
                   <tr className="bg-white text-slate-600 font-bold border-b border-slate-200 text-[9px] md:text-[10px] uppercase">
                     <th className="sticky left-0 z-20 bg-white px-4 py-3 border-r border-slate-200 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)]">TOB Name</th>
-                    {statusList.map((s, i) => (
-                        <th key={s} className={`px-2 py-3 text-center border-r border-slate-100 min-w-[70px] ${getColumnTheme(s)} ${i === statusList.length -1 ? 'border-r-4 border-r-white' : ''}`}>
-                            {s}
-                        </th>
-                    ))}
-                    {opCatList.map(o => (
-                        <th key={o} className={`px-2 py-3 text-center border-r border-slate-100 min-w-[70px] ${getColumnTheme(o)}`}>
-                            {o}
-                        </th>
-                    ))}
+                    {statusList.map((s, i) => {
+                        const c = generateColor(s)
+                        return (
+                            <th key={s} className={`px-2 py-3 text-center border-r border-slate-100 min-w-[70px] ${c.light} ${c.text} ${i === statusList.length -1 ? 'border-r-4 border-r-white' : ''}`}>
+                                {s}
+                            </th>
+                        )
+                    })}
+                    {opCatList.map(o => {
+                        const c = generateColor(o)
+                        return (
+                            <th key={o} className={`px-2 py-3 text-center border-r border-slate-100 min-w-[70px] ${c.light} ${c.text}`}>
+                                {o}
+                            </th>
+                        )
+                    })}
                   </tr>
                 </thead>
                 
                 <tbody className="divide-y divide-slate-100">
                   {tobList.map((tob, index) => {
                     const data = typeStat.tobs[tob] || { status: {}, opCat: {} }
-                    // Zebra Striping logic
                     const rowClass = index % 2 === 0 ? 'bg-white' : 'bg-slate-50/50'
                     
                     return (
                       <tr key={tob} className={`${rowClass} hover:bg-indigo-50/10 transition-colors`}>
-                        {/* Sticky Location Column */}
+                        {/* Sticky Location */}
                         <td className={`sticky left-0 z-10 px-4 py-3 font-bold text-slate-700 border-r border-slate-200 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)] ${rowClass}`}>
-                            <div className="flex items-center whitespace-nowrap">
-                                <MapPin className="w-3 h-3 mr-2 text-indigo-400" /> 
-                                {tob}
-                            </div>
+                            <div className="flex items-center whitespace-nowrap"><MapPin className="w-3 h-3 mr-2 text-indigo-400" /> {tob}</div>
                         </td>
                         
                         {/* Status Columns */}
                         {statusList.map((s, i) => {
                             const val = data.status[s] || 0
+                            const c = generateColor(s)
                             const isLast = i === statusList.length - 1
                             return (
-                                <td key={s} className={`px-2 py-3 text-center font-bold ${getColumnTheme(s)} ${isLast ? 'border-r-4 border-r-white' : 'border-r border-white'}`}>
-                                    {val > 0 ? <span className="scale-110 inline-block text-slate-900">{val}</span> : <span className="opacity-10">-</span>}
+                                <td key={s} className={`px-2 py-3 text-center font-bold ${c.light} ${c.text} ${isLast ? 'border-r-4 border-r-white' : 'border-r border-white'}`}>
+                                    {val > 0 ? <span className="scale-110 inline-block">{val}</span> : <span className="opacity-10">-</span>}
                                 </td>
                             )
                         })}
@@ -245,9 +244,10 @@ export default function AnalyticsPage() {
                         {/* OpCat Columns */}
                         {opCatList.map(o => {
                             const val = data.opCat[o] || 0
+                            const c = generateColor(o)
                             return (
-                                <td key={o} className={`px-2 py-3 text-center font-bold border-r border-white ${getColumnTheme(o)}`}>
-                                    {val > 0 ? <span className="scale-110 inline-block text-slate-900">{val}</span> : <span className="opacity-10">-</span>}
+                                <td key={o} className={`px-2 py-3 text-center font-bold border-r border-white ${c.light} ${c.text}`}>
+                                    {val > 0 ? <span className="scale-110 inline-block">{val}</span> : <span className="opacity-10">-</span>}
                                 </td>
                             )
                         })}
@@ -264,10 +264,9 @@ export default function AnalyticsPage() {
   )
 }
 
-// Compact Badge Component for Grid
-function SummaryBadge({ label, value, theme }: any) {
+function SummaryBadge({ label, value, colors }: any) {
     return (
-        <div className={`flex flex-col items-center justify-center p-2 rounded border ${theme}`}>
+        <div className={`flex flex-col items-center justify-center p-2 rounded border ${colors.bg} ${colors.border} ${colors.text}`}>
             <span className="text-xl font-black leading-none mb-1">{value}</span>
             <span className="text-[8px] font-bold uppercase opacity-70 text-center leading-tight">{label}</span>
         </div>
