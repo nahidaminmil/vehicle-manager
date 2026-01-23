@@ -28,9 +28,22 @@ export default function Dashboard() {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return router.push('/login')
 
-    // 1. Fetch Profile
-    const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single()
-    if (profile) setRole(profile.role)
+    // 1. Fetch Profile & Check for Redirect
+    const { data: profile } = await supabase
+        .from('profiles')
+        .select('role, assigned_vehicle_id') 
+        .eq('id', user.id)
+        .single()
+    
+    if (profile) {
+        setRole(profile.role)
+
+        // --- CRITICAL FIX: REDIRECT VEHICLE USERS ---
+        if (profile.role === 'vehicle_user' && profile.assigned_vehicle_id) {
+            router.replace(`/vehicle/${profile.assigned_vehicle_id}`)
+            return // Stop execution here so dashboard doesn't flash
+        }
+    }
 
     // 2. Fetch Dynamic Statuses
     const { data: sData } = await supabase.from('vehicle_statuses').select('name').order('sort_order')
@@ -76,7 +89,7 @@ export default function Dashboard() {
       return 'bg-gray-100 text-gray-800' 
   }
 
-  // --- 2. HELPER FOR OP CAT COLORS (MATCHING ANALYTICS) ---
+  // --- 2. HELPER FOR OP CAT COLORS ---
   const getOpCatColor = (c: string) => {
       const cat = (c || '').toLowerCase()
       // Blue for Ready/FMC
@@ -89,7 +102,7 @@ export default function Dashboard() {
       return 'bg-gray-100 text-gray-800'
   }
 
-  // --- 3. HELPER FOR ICONS (Restoring specific icons) ---
+  // --- 3. HELPER FOR ICONS ---
   const getStatusIcon = (name: string) => {
       const s = name.toLowerCase()
       if (s === 'active') return <CheckCircle className="w-6 h-6"/>
