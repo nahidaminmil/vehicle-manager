@@ -16,7 +16,7 @@ export default function Dashboard() {
   const [filter, setFilter] = useState('')
   const [role, setRole] = useState('') 
 
-  // --- DYNAMIC STATUS LIST ---
+  // --- DYNAMIC STATUS LIST (From DB) ---
   const [statusList, setStatusList] = useState<string[]>([])
   const [statusFilter, setStatusFilter] = useState('ALL') 
 
@@ -45,7 +45,7 @@ export default function Dashboard() {
         }
     }
 
-    // 2. Fetch Dynamic Statuses
+    // 2. Fetch Dynamic Statuses (This ensures new DB rows appear as Cards)
     const { data: sData } = await supabase.from('vehicle_statuses').select('name').order('sort_order')
     if (sData) setStatusList(sData.map((s: any) => s.name))
 
@@ -80,35 +80,46 @@ export default function Dashboard() {
     return matchesText && matchesStatus
   })
 
-  // --- 1. HELPER FOR STATUS COLORS ---
-  const getStatusColor = (s: string) => {
-      const status = (s || '').toLowerCase()
-      if (status === 'active') return 'bg-green-100 text-green-800'
-      if (status === 'maintenance') return 'bg-orange-100 text-orange-800'
-      if (status === 'inactive') return 'bg-red-100 text-red-800'
-      return 'bg-gray-100 text-gray-800' 
+  // --- SMART ATTRIBUTES GENERATOR ---
+  // This logic automatically styles new statuses based on their name keywords
+  const getStatusAttributes = (name: string) => {
+      const s = (name || '').toLowerCase()
+      
+      // 1. ACTIVE Variants (Green)
+      if (s.includes('active')) return { 
+          badge: 'bg-green-100 text-green-800', 
+          card: 'bg-green-600', 
+          icon: <CheckCircle className="w-6 h-6"/> 
+      }
+      // 2. INACTIVE Variants (Red)
+      if (s.includes('inactive') || s.includes('off road')) return { 
+          badge: 'bg-red-100 text-red-800', 
+          card: 'bg-red-600', 
+          icon: <XCircle className="w-6 h-6"/> 
+      }
+      // 3. MAINTENANCE Variants (Orange)
+      if (s.includes('maintenance') || s.includes('workshop')) return { 
+          badge: 'bg-orange-100 text-orange-800', 
+          card: 'bg-orange-600', 
+          icon: <Wrench className="w-6 h-6"/> 
+      }
+      
+      // 4. DEFAULT/UNKNOWN Variants (Blue) - Handles new categories like 'Limited Range'
+      return { 
+          badge: 'bg-blue-100 text-blue-800', 
+          card: 'bg-blue-600', 
+          icon: <Activity className="w-6 h-6"/> 
+      }
   }
 
-  // --- 2. HELPER FOR OP CAT COLORS ---
+  // --- OP CATEGORY COLOR HELPER ---
   const getOpCatColor = (c: string) => {
       const cat = (c || '').toLowerCase()
-      // Blue for Ready/FMC
       if (cat.includes('fully') || cat.includes('fmc')) return 'bg-blue-100 text-blue-800'
-      // Brown/Amber for Degraded
-      if (cat.includes('degraded')) return 'bg-amber-200 text-amber-900' 
-      // Red for NMC
+      if (cat.includes('degraded')) return 'bg-amber-100 text-amber-900' 
       if (cat.includes('non') || cat.includes('nmc')) return 'bg-red-100 text-red-800'
-      
+      // Default for unknown op categories
       return 'bg-gray-100 text-gray-800'
-  }
-
-  // --- 3. HELPER FOR ICONS ---
-  const getStatusIcon = (name: string) => {
-      const s = name.toLowerCase()
-      if (s === 'active') return <CheckCircle className="w-6 h-6"/>
-      if (s === 'inactive') return <XCircle className="w-6 h-6"/>
-      if (s === 'maintenance') return <Wrench className="w-6 h-6"/>
-      return <Activity className="w-6 h-6"/>
   }
 
   if (loading) return <div className="min-h-screen flex items-center justify-center bg-gray-100"><div className="text-xl font-black text-gray-900">Loading Command Dashboard...</div></div>
@@ -163,8 +174,9 @@ export default function Dashboard() {
       </div>
 
       {/* DYNAMIC STATS CARDS GRID */}
+      {/* Automatically creates a card for EVERY status found in the database */}
       <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-3 md:gap-4 mb-6 md:mb-8">
-        {/* Always show TOTAL first */}
+        {/* 1. Total Fleet (Static First Card) */}
         <StatCard 
             title="Total Fleet" 
             value={vehicles.length} 
@@ -174,24 +186,18 @@ export default function Dashboard() {
             onClick={() => setStatusFilter('ALL')}
         />
         
-        {/* Render a card for each Status found in DB */}
+        {/* 2. Dynamic Cards from DB */}
         {statusList.map(statusName => {
             const count = vehicles.filter(v => v.status === statusName).length
-            
-            // Determine color dynamically
-            let color = 'bg-gray-600'
-            const s = statusName.toLowerCase()
-            if (s === 'active') color = 'bg-green-600'
-            else if (s === 'maintenance') color = 'bg-orange-600'
-            else if (s === 'inactive') color = 'bg-red-600'
+            const styles = getStatusAttributes(statusName)
 
             return (
                 <StatCard 
                     key={statusName}
                     title={statusName} 
                     value={count} 
-                    icon={getStatusIcon(statusName)} 
-                    color={color} 
+                    icon={styles.icon} 
+                    color={styles.card} 
                     isActive={statusFilter === statusName}
                     onClick={() => setStatusFilter(statusName)}
                 />
@@ -237,14 +243,14 @@ export default function Dashboard() {
                   <td className="px-6 py-4 font-bold text-gray-600 whitespace-nowrap">{vehicle.vehicle_type_name || '---'}</td>
                   <td className="px-6 py-4 font-bold text-gray-600 whitespace-nowrap"><span className="flex items-center"><MapPin className="w-3 h-3 mr-1 opacity-50"/> {vehicle.tob || '---'}</span></td>
                   
-                  {/* DYNAMIC STATUS BADGE */}
+                  {/* DYNAMIC STATUS BADGE - Uses smart attributes for automatic coloring */}
                   <td className="px-6 py-4 whitespace-nowrap">
-                    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold uppercase tracking-wide ${getStatusColor(vehicle.status)}`}>
+                    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold uppercase tracking-wide ${getStatusAttributes(vehicle.status).badge}`}>
                         {vehicle.status}
                     </span>
                   </td>
 
-                  {/* DYNAMIC OP CAT BADGE (UPDATED COLORS) */}
+                  {/* DYNAMIC OP CAT BADGE - Uses smart coloring */}
                   <td className="px-6 py-4 whitespace-nowrap">
                     <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold uppercase tracking-wide ${getOpCatColor(vehicle.operational_category)}`}>
                         {vehicle.operational_category}
@@ -270,7 +276,7 @@ export default function Dashboard() {
                     </div>
                     <div className="flex flex-col items-end gap-1">
                         {/* Status Badge */}
-                        <span className={`px-2 py-0.5 rounded text-[10px] font-black uppercase ${getStatusColor(vehicle.status)}`}>{vehicle.status}</span>
+                        <span className={`px-2 py-0.5 rounded text-[10px] font-black uppercase ${getStatusAttributes(vehicle.status).badge}`}>{vehicle.status}</span>
                         {/* Op Cat Badge */}
                         <span className={`px-2 py-0.5 rounded text-[10px] font-black uppercase ${getOpCatColor(vehicle.operational_category)}`}>{vehicle.operational_category}</span>
                     </div>

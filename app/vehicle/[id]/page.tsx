@@ -23,10 +23,10 @@ export default function VehicleDetails() {
   const [loading, setLoading] = useState(true)
   const [userRole, setUserRole] = useState('') 
   
-  // --- DYNAMIC LISTS (ALL FROM DB NOW) ---
+  // --- DYNAMIC LISTS ---
   const [tobList, setTobList] = useState<string[]>([]) 
-  const [statusList, setStatusList] = useState<string[]>([]) // <--- NEW
-  const [opCatList, setOpCatList] = useState<string[]>([])   // <--- NEW
+  const [statusList, setStatusList] = useState<string[]>([]) 
+  const [opCatList, setOpCatList] = useState<string[]>([])   
 
   // --- MODALS ---
   const [showQr, setShowQr] = useState(false)
@@ -74,10 +74,12 @@ export default function VehicleDetails() {
     if (locData) setTobList(locData.map((l: any) => l.name))
 
     const { data: statusData } = await supabase.from('vehicle_statuses').select('name').order('sort_order')
-    if (statusData) setStatusList(statusData.map((s: any) => s.name))
+    const validStatusNames = statusData ? statusData.map((s: any) => s.name) : []
+    if (statusData) setStatusList(validStatusNames)
 
     const { data: opData } = await supabase.from('operational_categories').select('name').order('sort_order')
-    if (opData) setOpCatList(opData.map((o: any) => o.name))
+    const validOpCatNames = opData ? opData.map((o: any) => o.name) : []
+    if (opData) setOpCatList(validOpCatNames)
 
     // 2. Fetch Vehicle Data
     const { data: vehicleRaw } = await supabase.from('vehicles').select('*').eq('id', id).single()
@@ -105,15 +107,21 @@ export default function VehicleDetails() {
           setEvidence(grouped)
       }
 
+      // --- SMART FORM INITIALIZATION (FIXES BOTH FIELDS) ---
+      const currentStatusValid = validStatusNames.includes(vehicleData.status)
+      const currentOpCatValid = validOpCatNames.includes(vehicleData.operational_category)
+
       setEditFormData({
         vehicle_uid: vehicleData.vehicle_uid || '',
         tob: vehicleData.tob || (locData && locData[0]?.name) || '',
         vehicle_type_id: vehicleData.vehicle_type_id || '', 
         mileage: vehicleData.mileage || 0,
         
-        // Defaults to first available option if current is invalid
-        operational_category: vehicleData.operational_category || (opData && opData[0]?.name) || '',
-        status: vehicleData.status || (statusData && statusData[0]?.name) || '',
+        // AUTO-CORRECT: Status
+        status: currentStatusValid ? vehicleData.status : (validStatusNames[0] || ''),
+        
+        // AUTO-CORRECT: Op Category (Fixes the new issue you mentioned)
+        operational_category: currentOpCatValid ? vehicleData.operational_category : (validOpCatNames[0] || ''),
         
         description: vehicleData.description || '',
         updater_un_id: vehicleData.last_updated_by_un_id || ''
@@ -331,6 +339,24 @@ export default function VehicleDetails() {
 
   const getLoginUrl = (v: any) => `${window.location.origin}/login?auto_email=${encodeURIComponent(v.auto_email)}&auto_pass=${encodeURIComponent(v.auto_password)}`
 
+  // Helper to colorize status (Smart & Dynamic)
+  const getStatusColorClass = (s: string) => {
+      const sl = (s || '').toLowerCase()
+      if(sl.includes('active')) return 'bg-green-100 text-green-800'
+      if(sl.includes('inactive')) return 'bg-red-100 text-red-800'
+      if(sl.includes('maintenance')) return 'bg-orange-100 text-orange-800'
+      return 'bg-blue-100 text-blue-800' 
+  }
+
+  // Helper for Op Cat color (Smart & Dynamic)
+  const getOpCatColorClass = (c: string) => {
+      const cl = (c || '').toLowerCase()
+      if(cl.includes('fully') || cl.includes('fmc')) return 'bg-blue-100 text-blue-800'
+      if(cl.includes('degraded')) return 'bg-amber-100 text-amber-900'
+      if(cl.includes('non') || cl.includes('nmc')) return 'bg-red-100 text-red-800'
+      return 'bg-gray-100 text-gray-800'
+  }
+
   if (loading) return <div className="p-8 font-bold text-xl">Loading...</div>
   if (!vehicle) return <div className="p-8 font-bold text-xl text-red-600">Vehicle not found</div>
 
@@ -417,7 +443,7 @@ export default function VehicleDetails() {
                         {statusList.map(s => <option key={s} value={s}>{s}</option>)}
                     </select>
                 ) : (
-                    <span className={`px-3 py-1 text-sm font-black rounded-full inline-block ${vehicle.status === 'Active' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>{vehicle.status}</span>
+                    <span className={`px-3 py-1 text-sm font-black rounded-full inline-block ${getStatusColorClass(vehicle.status)}`}>{vehicle.status}</span>
                 )}
             </div>
 
@@ -429,7 +455,7 @@ export default function VehicleDetails() {
                         {opCatList.map(c => <option key={c} value={c}>{c}</option>)}
                     </select>
                 ) : (
-                    <span className={`px-3 py-1 text-sm font-black rounded-full inline-block ${vehicle.operational_category === 'Fully Mission Capable' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>{vehicle.operational_category}</span>
+                    <span className={`px-3 py-1 text-sm font-black rounded-full inline-block ${getOpCatColorClass(vehicle.operational_category)}`}>{vehicle.operational_category}</span>
                 )}
             </div>
         
