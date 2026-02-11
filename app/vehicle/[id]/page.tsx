@@ -1,4 +1,5 @@
 "use client"
+
 import { useEffect, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
@@ -14,7 +15,7 @@ export default function VehicleDetails() {
   const { id } = useParams()
   const router = useRouter()
   
-  // --- STATE ---
+  // --- STATE MANAGEMENT ---
   const [vehicle, setVehicle] = useState<any>(null)
   const [gallery, setGallery] = useState<any[]>([]) 
   const [logs, setLogs] = useState<any[]>([])       
@@ -35,8 +36,13 @@ export default function VehicleDetails() {
   // --- EDIT PROFILE STATE ---
   const [isEditing, setIsEditing] = useState(false)
   const [editFormData, setEditFormData] = useState({
-    vehicle_uid: '', tob: '', vehicle_type_id: '', mileage: 0, 
-    operational_category: '', status: '', description: '',
+    vehicle_uid: '', 
+    tob: '', 
+    vehicle_type_id: '', 
+    mileage: 0, 
+    operational_category: '', 
+    status: '', 
+    description: '',
     updater_un_id: '', 
   })
   const [updaterPhotoFile, setUpdaterPhotoFile] = useState<File | null>(null)
@@ -57,10 +63,28 @@ export default function VehicleDetails() {
   const [genNotes, setGenNotes] = useState('')
   const [maintStatus, setMaintStatus] = useState('Pending')
   
-  // New Reporter Fields
+  // --- NEW REPORTER FIELDS ---
   const [reporterUnId, setReporterUnId] = useState('')
   const [reporterPhotoFile, setReporterPhotoFile] = useState<File | null>(null)
   
+  // --- SMART COLOR HELPERS ---
+  const getStatusColorClass = (s: string) => {
+      const sl = (s || '').toLowerCase()
+      // Check INACTIVE first so it doesn't get caught by 'active' logic
+      if(sl.includes('inactive')) return 'bg-red-100 text-red-800'
+      if(sl.includes('active')) return 'bg-green-100 text-green-800'
+      if(sl.includes('maintenance')) return 'bg-orange-100 text-orange-800'
+      return 'bg-blue-100 text-blue-800' 
+  }
+
+  const getOpCatColorClass = (c: string) => {
+      const cl = (c || '').toLowerCase()
+      if(cl.includes('fully') || cl.includes('fmc')) return 'bg-blue-100 text-blue-800'
+      if(cl.includes('degraded')) return 'bg-amber-100 text-amber-900'
+      if(cl.includes('non') || cl.includes('nmc')) return 'bg-red-100 text-red-800'
+      return 'bg-gray-100 text-gray-800'
+  }
+
   // --- FETCH DATA ---
   async function fetchData() {
     const { data: { user } } = await supabase.auth.getUser()
@@ -74,10 +98,12 @@ export default function VehicleDetails() {
     if (locData) setTobList(locData.map((l: any) => l.name))
 
     const { data: statusData } = await supabase.from('vehicle_statuses').select('name').order('sort_order')
+    // Extract valid names for validation logic
     const validStatusNames = statusData ? statusData.map((s: any) => s.name) : []
     if (statusData) setStatusList(validStatusNames)
 
     const { data: opData } = await supabase.from('operational_categories').select('name').order('sort_order')
+    // Extract valid names for validation logic
     const validOpCatNames = opData ? opData.map((o: any) => o.name) : []
     if (opData) setOpCatList(validOpCatNames)
 
@@ -107,7 +133,8 @@ export default function VehicleDetails() {
           setEvidence(grouped)
       }
 
-      // --- SMART FORM INITIALIZATION (FIXES BOTH FIELDS) ---
+      // --- CRITICAL AUTO-CORRECT LOGIC ---
+      // This solves the issue where old data (e.g. "Active") conflicts with new rules ("Active Long Range")
       const currentStatusValid = validStatusNames.includes(vehicleData.status)
       const currentOpCatValid = validOpCatNames.includes(vehicleData.operational_category)
 
@@ -117,10 +144,10 @@ export default function VehicleDetails() {
         vehicle_type_id: vehicleData.vehicle_type_id || '', 
         mileage: vehicleData.mileage || 0,
         
-        // AUTO-CORRECT: Status
+        // If current status is NOT in the new list, switch to the first valid one automatically
         status: currentStatusValid ? vehicleData.status : (validStatusNames[0] || ''),
         
-        // AUTO-CORRECT: Op Category (Fixes the new issue you mentioned)
+        // Same logic for Operational Category
         operational_category: currentOpCatValid ? vehicleData.operational_category : (validOpCatNames[0] || ''),
         
         description: vehicleData.description || '',
@@ -130,8 +157,11 @@ export default function VehicleDetails() {
     setLoading(false)
   }
 
-  useEffect(() => { if (id) fetchData() }, [id])
+  useEffect(() => { 
+      if (id) fetchData() 
+  }, [id])
 
+  // --- IMAGE RESIZER ---
   const resizeImage = (file: File): Promise<Blob> => {
     return new Promise((resolve) => {
       const img = document.createElement('img')
@@ -151,49 +181,78 @@ export default function VehicleDetails() {
     })
   }
 
-  // --- ACTIONS ---
+  // --- ACTION: UPLOAD PROFILE PHOTO ---
   async function handleMainUpload(event: any) {
     if (gallery.length >= 10) return alert('Max 10 profile photos allowed.')
     try {
-      const file = event.target.files[0]; if (!file) return; setUploading(true)
+      const file = event.target.files[0]
+      if (!file) return
+      setUploading(true)
+      
       const blob = await resizeImage(file)
       const fileName = `veh_${vehicle.id}_${Date.now()}.jpg`
-      await supabase.storage.from('vehicle-media').upload(fileName, blob, { contentType: 'image/jpeg', upsert: true })
+      
+      await supabase.storage.from('vehicle-media').upload(fileName, blob, { upsert: true })
       const { data: { publicUrl } } = supabase.storage.from('vehicle-media').getPublicUrl(fileName)
+      
       await supabase.from('vehicle_gallery').insert({ vehicle_id: vehicle.id, image_url: publicUrl })
       await supabase.from('vehicles').update({ vehicle_image_url: publicUrl }).eq('id', vehicle.id)
-      alert('Profile Photo Added!'); fetchData()
-    } catch (e: any) { alert(e.message) } finally { setUploading(false) }
+      
+      alert('Profile Photo Added!')
+      fetchData()
+    } catch (e: any) { 
+        alert(e.message) 
+    } finally { 
+        setUploading(false) 
+    }
   }
 
+  // --- ACTION: UPLOAD LOG PHOTO ---
   async function handleLogUpload(event: any, logId: string) {
     try {
-      const file = event.target.files[0]; if (!file) return; setUploading(true)
+      const file = event.target.files[0]
+      if (!file) return
+      setUploading(true)
+      
       const blob = await resizeImage(file)
       const fileName = `log_${logId}_${Date.now()}.jpg`
-      await supabase.storage.from('vehicle-media').upload(fileName, blob, { contentType: 'image/jpeg', upsert: true })
+      
+      await supabase.storage.from('vehicle-media').upload(fileName, blob, { upsert: true })
       const { data: { publicUrl } } = supabase.storage.from('vehicle-media').getPublicUrl(fileName)
+      
       await supabase.from('log_evidence').insert({ log_id: logId, image_url: publicUrl })
-      alert('Photo attached to log!'); fetchData()
-    } catch (e: any) { alert(e.message) } finally { setUploading(false) }
+      
+      fetchData()
+    } catch (e: any) { 
+        alert(e.message) 
+    } finally { 
+        setUploading(false) 
+    }
   }
 
-  async function deleteGalleryPhoto(pid: string) { if(confirm('Delete photo?')) { await supabase.from('vehicle_gallery').delete().eq('id', pid); fetchData() }}
+  // --- ACTION: DELETE PHOTOS ---
+  async function deleteGalleryPhoto(pid: string) { 
+      if(confirm('Delete photo?')) { 
+          await supabase.from('vehicle_gallery').delete().eq('id', pid)
+          fetchData() 
+      }
+  }
 
-  // --- DELETE ID PHOTOS (SUPER ADMIN) ---
-  async function deleteIdentityIdPhoto() {
+  async function deleteIdentityIdPhoto() { 
       if(!confirm('Delete the Updater ID Photo?')) return
       const { error } = await supabase.from('vehicles').update({ last_updated_by_photo: null }).eq('id', vehicle.id)
-      if (error) alert(error.message); else fetchData()
+      if (error) alert(error.message)
+      else fetchData()
   }
 
-  async function deleteLogReporterPhoto(logId: string) {
+  async function deleteLogReporterPhoto(logId: string) { 
       if(!confirm('Delete the Reporter ID Photo?')) return
       const { error } = await supabase.from('maintenance_logs').update({ reported_by_photo: null }).eq('id', logId)
-      if (error) alert(error.message); else fetchData()
+      if (error) alert(error.message)
+      else fetchData()
   }
 
-  // --- SAVE PROFILE ---
+  // --- ACTION: SAVE PROFILE ---
   async function saveProfile() {
     const unIdRegex = /^M-\d{8}$/
     if (editFormData.updater_un_id && !unIdRegex.test(editFormData.updater_un_id)) {
@@ -206,13 +265,14 @@ export default function VehicleDetails() {
     if (updaterPhotoFile) {
         const blob = await resizeImage(updaterPhotoFile)
         const fileName = `updater_id_${vehicle.id}_${Date.now()}.jpg`
-        const { error } = await supabase.storage.from('vehicle-media').upload(fileName, blob, { contentType: 'image/jpeg', upsert: true })
+        const { error } = await supabase.storage.from('vehicle-media').upload(fileName, blob, { upsert: true })
         if (!error) {
             const { data } = supabase.storage.from('vehicle-media').getPublicUrl(fileName)
             updaterPhotoUrl = data.publicUrl
         }
     }
 
+    // Update with auto-corrected status if needed
     const { error } = await supabase.from('vehicles').update({
         vehicle_uid: editFormData.vehicle_uid,
         tob: editFormData.tob,
@@ -228,7 +288,10 @@ export default function VehicleDetails() {
 
     setUploading(false)
     if(error) alert("Error saving: " + error.message)
-    else { setIsEditing(false); fetchData() }
+    else { 
+        setIsEditing(false)
+        fetchData() 
+    }
   }
 
   async function handleLogout() {
@@ -239,13 +302,19 @@ export default function VehicleDetails() {
   async function handleDeleteVehicle() {
       const confirmText = prompt("WARNING: Type 'DELETE' to confirm:")
       if (confirmText !== 'DELETE') return 
+      
       setLoading(true)
       const result = await deleteVehicle(vehicle.id)
-      if (result.success) { alert('Vehicle Destroyed.'); router.push('/') } 
-      else { alert('Error: ' + result.error); setLoading(false) }
+      
+      if (result.success) { 
+          router.push('/') 
+      } else { 
+          alert('Error: ' + result.error)
+          setLoading(false) 
+      }
   }
 
-  // --- SUBMIT NEW LOG ---
+  // --- ACTION: SUBMIT NEW LOG ---
   async function handleSubmitLog() {
     if (!remark) return alert('Please write a fault description.')
     
@@ -261,7 +330,7 @@ export default function VehicleDetails() {
         if (reporterPhotoFile) {
             const blob = await resizeImage(reporterPhotoFile)
             const fileName = `reporter_id_${Date.now()}.jpg`
-            const { error: upErr } = await supabase.storage.from('vehicle-media').upload(fileName, blob, { contentType: 'image/jpeg', upsert: true })
+            const { error: upErr } = await supabase.storage.from('vehicle-media').upload(fileName, blob, { upsert: true })
             if (!upErr) {
                 const { data } = supabase.storage.from('vehicle-media').getPublicUrl(fileName)
                 reporterPhotoUrl = data.publicUrl
@@ -288,21 +357,27 @@ export default function VehicleDetails() {
         if (logFile && newLog) {
             const blob = await resizeImage(logFile)
             const fileName = `log_${newLog.id}_${Date.now()}.jpg`
-            const { error: uploadErr } = await supabase.storage.from('vehicle-media').upload(fileName, blob, { contentType: 'image/jpeg', upsert: true })
+            const { error: uploadErr } = await supabase.storage.from('vehicle-media').upload(fileName, blob, { upsert: true })
             if (uploadErr) throw uploadErr
             const { data: { publicUrl } } = supabase.storage.from('vehicle-media').getPublicUrl(fileName)
             await supabase.from('log_evidence').insert({ log_id: newLog.id, image_url: publicUrl })
         }
 
         alert('Issue Reported Successfully!')
+        // Reset Form
         setRemark(''); setActionReq(''); setResponsible(''); setLogFile(null); 
         setPriority('Routine'); setEstDays(''); setOfficerRemarks(''); setGenNotes(''); setMaintStatus('Pending');
         setReporterUnId(''); setReporterPhotoFile(null);
+        
         await fetchData() 
-    } catch (err: any) { alert("Error: " + err.message) } finally { setUploading(false) }
+    } catch (err: any) { 
+        alert("Error: " + err.message) 
+    } finally { 
+        setUploading(false) 
+    }
   }
 
-  // --- EDIT EXISTING LOG ---
+  // --- ACTION: EDIT EXISTING LOG ---
   function startEditingLog(log: any) {
       setEditingLogId(log.id)
       setEditLogData({
@@ -338,24 +413,6 @@ export default function VehicleDetails() {
   }
 
   const getLoginUrl = (v: any) => `${window.location.origin}/login?auto_email=${encodeURIComponent(v.auto_email)}&auto_pass=${encodeURIComponent(v.auto_password)}`
-
-  // Helper to colorize status (Smart & Dynamic)
-  const getStatusColorClass = (s: string) => {
-      const sl = (s || '').toLowerCase()
-      if(sl.includes('active')) return 'bg-green-100 text-green-800'
-      if(sl.includes('inactive')) return 'bg-red-100 text-red-800'
-      if(sl.includes('maintenance')) return 'bg-orange-100 text-orange-800'
-      return 'bg-blue-100 text-blue-800' 
-  }
-
-  // Helper for Op Cat color (Smart & Dynamic)
-  const getOpCatColorClass = (c: string) => {
-      const cl = (c || '').toLowerCase()
-      if(cl.includes('fully') || cl.includes('fmc')) return 'bg-blue-100 text-blue-800'
-      if(cl.includes('degraded')) return 'bg-amber-100 text-amber-900'
-      if(cl.includes('non') || cl.includes('nmc')) return 'bg-red-100 text-red-800'
-      return 'bg-gray-100 text-gray-800'
-  }
 
   if (loading) return <div className="p-8 font-bold text-xl">Loading...</div>
   if (!vehicle) return <div className="p-8 font-bold text-xl text-red-600">Vehicle not found</div>
@@ -539,7 +596,7 @@ export default function VehicleDetails() {
                       <input type="text" value={genNotes} onChange={(e) => setGenNotes(e.target.value)} className="w-full p-2 border rounded font-bold text-sm text-gray-900" placeholder="Other Notes" />
                   </div>
 
-                  {/* REPORTED BY SECTION (STYLED BUTTON) */}
+                  {/* REPORTED BY SECTION */}
                   <div className="bg-blue-50 p-4 rounded-lg border border-blue-200 space-y-3">
                       <h3 className="text-sm font-black uppercase text-blue-600 flex items-center"><FileBadge className="w-4 h-4 mr-1"/> Reported By (Mandatory)</h3>
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -556,7 +613,7 @@ export default function VehicleDetails() {
                                   </span>
                                   <input type="file" accept="image/*" capture="environment" className="hidden" onChange={(e) => setReporterPhotoFile(e.target.files ? e.target.files[0] : null)} />
                                   
-                                  {/* CLEAR BUTTON FOR FORM (Anyone) */}
+                                  {/* CLEAR BUTTON */}
                                   {reporterPhotoFile && (
                                       <button 
                                         onClick={(e) => {
