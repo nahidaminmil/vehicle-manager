@@ -38,7 +38,7 @@ export default function Dashboard() {
     if (profile) {
         setRole(profile.role)
 
-        // --- CRITICAL FIX: REDIRECT VEHICLE USERS ---
+        // --- REDIRECT VEHICLE USERS ---
         if (profile.role === 'vehicle_user' && profile.assigned_vehicle_id) {
             router.replace(`/vehicle/${profile.assigned_vehicle_id}`)
             return // Stop execution here so dashboard doesn't flash
@@ -80,34 +80,39 @@ export default function Dashboard() {
     return matchesText && matchesStatus
   })
 
-  // --- SMART ATTRIBUTES GENERATOR (FIXED) ---
+  // --- SMART ATTRIBUTES GENERATOR (FIXED COLORS) ---
   const getStatusAttributes = (name: string) => {
       const s = (name || '').toLowerCase()
       
-      // 1. INACTIVE Variants (Red) - CHECK THIS FIRST!
-      // This prevents "Inactive" from being caught by the "Active" check below
+      // 1. INACTIVE Variants (Red) - Priority Check
       if (s.includes('inactive') || s.includes('off road')) return { 
           badge: 'bg-red-100 text-red-800', 
           card: 'bg-red-600', 
           icon: <XCircle className="w-6 h-6"/> 
       }
+
+      // 2. SHORT RANGE (Teal) - Specific Check for new category
+      if (s.includes('short range')) return { 
+          badge: 'bg-teal-100 text-teal-800', 
+          card: 'bg-teal-600', 
+          icon: <CheckCircle className="w-6 h-6"/> 
+      }
       
-      // 2. ACTIVE Variants (Green)
-      // "Active Long Range" will be caught here because it contains "active"
+      // 3. ACTIVE Variants (Green) - General Check
       if (s.includes('active')) return { 
           badge: 'bg-green-100 text-green-800', 
           card: 'bg-green-600', 
           icon: <CheckCircle className="w-6 h-6"/> 
       }
       
-      // 3. MAINTENANCE Variants (Orange)
+      // 4. MAINTENANCE Variants (Orange)
       if (s.includes('maintenance') || s.includes('workshop')) return { 
           badge: 'bg-orange-100 text-orange-800', 
           card: 'bg-orange-600', 
           icon: <Wrench className="w-6 h-6"/> 
       }
       
-      // 4. DEFAULT/UNKNOWN Variants (Blue)
+      // 5. DEFAULT/UNKNOWN Variants (Blue)
       return { 
           badge: 'bg-blue-100 text-blue-800', 
           card: 'bg-blue-600', 
@@ -115,11 +120,11 @@ export default function Dashboard() {
       }
   }
 
-  // --- OP CATEGORY COLOR HELPER ---
+  // --- OP CATEGORY COLORS ---
   const getOpCatColor = (c: string) => {
       const cat = (c || '').toLowerCase()
       if (cat.includes('fully') || cat.includes('fmc')) return 'bg-blue-100 text-blue-800'
-      if (cat.includes('degraded')) return 'bg-amber-200 text-amber-900' 
+      if (cat.includes('degraded')) return 'bg-amber-100 text-amber-900' 
       if (cat.includes('non') || cat.includes('nmc')) return 'bg-red-100 text-red-800'
       return 'bg-gray-100 text-gray-800'
   }
@@ -143,7 +148,7 @@ export default function Dashboard() {
           </div>
         </div>
         
-        {/* Navigation Buttons - RESTORED FULL LIST */}
+        {/* Navigation Buttons (Restored) */}
         <div className="flex flex-wrap gap-2 w-full md:w-auto items-center justify-start md:justify-end">
            {(role === 'super_admin' || role === 'admin' || role === 'tob_admin' || role === 'workshop_admin') && (
                <Link href="/workshop" className="flex-1 md:flex-none flex items-center justify-center bg-orange-600 hover:bg-orange-700 text-white px-3 py-2 md:px-4 md:py-3 rounded-lg font-bold shadow-sm text-sm transition-colors">
@@ -177,7 +182,6 @@ export default function Dashboard() {
 
       {/* DYNAMIC STATS CARDS GRID */}
       <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-3 md:gap-4 mb-6 md:mb-8">
-        {/* Always show TOTAL first */}
         <StatCard 
             title="Total Fleet" 
             value={vehicles.length} 
@@ -187,18 +191,18 @@ export default function Dashboard() {
             onClick={() => setStatusFilter('ALL')}
         />
         
-        {/* Render a card for each Status found in DB */}
+        {/* Render Cards from DB */}
         {statusList.map(statusName => {
             const count = vehicles.filter(v => v.status === statusName).length
-            const style = getStatusAttributes(statusName)
+            const styles = getStatusAttributes(statusName)
 
             return (
                 <StatCard 
                     key={statusName}
                     title={statusName} 
                     value={count} 
-                    icon={style.icon} 
-                    color={style.card} 
+                    icon={styles.icon} 
+                    color={styles.card} 
                     isActive={statusFilter === statusName}
                     onClick={() => setStatusFilter(statusName)}
                 />
