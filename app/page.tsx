@@ -12,110 +12,284 @@ export default function Dashboard() {
   const router = useRouter()
   const [vehicles, setVehicles] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
+  const [errorMsg, setErrorMsg] = useState('') 
   const [filter, setFilter] = useState('')
   const [role, setRole] = useState('') 
-  const [statusList, setStatusList] = useState<string[]>([]) 
+
+  // --- DYNAMIC LISTS ---
+  const [statusList, setStatusList] = useState<string[]>([])
   const [statusFilter, setStatusFilter] = useState('ALL') 
 
-  useEffect(() => { checkUserAndFetch() }, [])
+  useEffect(() => {
+    checkUserAndFetch()
+  }, [])
 
   async function checkUserAndFetch() {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return router.push('/login')
 
-    const { data: profile } = await supabase.from('profiles').select('role, assigned_vehicle_id').eq('id', user.id).single()
+    // 1. Fetch Profile & Check for Redirect
+    const { data: profile } = await supabase
+        .from('profiles')
+        .select('role, assigned_vehicle_id') 
+        .eq('id', user.id)
+        .single()
+    
     if (profile) {
         setRole(profile.role)
+        // --- REDIRECT VEHICLE USERS ---
         if (profile.role === 'vehicle_user' && profile.assigned_vehicle_id) {
-            router.replace(`/vehicle/${profile.assigned_vehicle_id}`); return
+            router.replace(`/vehicle/${profile.assigned_vehicle_id}`)
+            return 
         }
     }
 
+    // 2. Fetch Dynamic Statuses
     const { data: sData } = await supabase.from('vehicle_statuses').select('name').order('sort_order')
     if (sData) setStatusList(sData.map((s: any) => s.name))
 
-    const { data } = await supabase.from('vehicle_dashboard_view').select('*').order('created_at', { ascending: false })
-    if (data) setVehicles(data)
+    // 3. Fetch Vehicles
+    const { data, error } = await supabase
+      .from('vehicle_dashboard_view')
+      .select('*')
+      .order('created_at', { ascending: false })
+    
+    if (error) setErrorMsg(error.message)
+    else setVehicles(data || [])
+    
     setLoading(false)
   }
 
-  const filteredVehicles = vehicles.filter(v => {
-    const matchText = (v.vehicle_uid+v.vehicle_type_name+v.tob).toLowerCase().includes(filter.toLowerCase())
-    const matchStatus = statusFilter === 'ALL' ? true : v.status === statusFilter
-    return matchText && matchStatus
-  })
-
-  // --- SMART STYLES (FIXED INACTIVE COLOR BUG) ---
-  const getStatusAttr = (name: string) => {
-      const s = (name || '').toLowerCase()
-      // Fix: Check for 'inactive' explicitly BEFORE checking 'active'
-      if (s.includes('inactive')) return { badge: 'bg-red-100 text-red-800', card: 'bg-red-600', icon: <XCircle className="w-6 h-6"/> }
-      if (s.includes('active')) return { badge: 'bg-green-100 text-green-800', card: 'bg-green-600', icon: <CheckCircle className="w-6 h-6"/> }
-      if (s.includes('maintenance')) return { badge: 'bg-orange-100 text-orange-800', card: 'bg-orange-600', icon: <Wrench className="w-6 h-6"/> }
-      return { badge: 'bg-blue-100 text-blue-800', card: 'bg-blue-600', icon: <Activity className="w-6 h-6"/> }
+  async function handleLogout() {
+    await supabase.auth.signOut()
+    router.push('/login')
+    router.refresh()
   }
 
+  // --- DYNAMIC FILTERING ---
+  const filteredVehicles = vehicles.filter(v => {
+    const matchesText = (v.vehicle_uid || '').toLowerCase().includes(filter.toLowerCase()) ||
+                        (v.vehicle_type_name || '').toLowerCase().includes(filter.toLowerCase()) ||
+                        (v.tob || '').toLowerCase().includes(filter.toLowerCase())
+
+    const matchesStatus = statusFilter === 'ALL' ? true : v.status === statusFilter
+    return matchesText && matchesStatus
+  })
+
+  // --- SMART ATTRIBUTES (FIXED INACTIVE COLOR) ---
+  const getStatusAttributes = (name: string) => {
+      const s = (name || '').toLowerCase()
+      
+      // FIX: Check INACTIVE first (because "inactive" contains the word "active")
+      if (s.includes('inactive') || s.includes('off road')) return { 
+          badge: 'bg-red-100 text-red-800', 
+          card: 'bg-red-600', 
+          icon: <XCircle className="w-6 h-6"/> 
+      }
+      // Then check ACTIVE
+      if (s.includes('active')) return { 
+          badge: 'bg-green-100 text-green-800', 
+          card: 'bg-green-600', 
+          icon: <CheckCircle className="w-6 h-6"/> 
+      }
+      // Then MAINTENANCE
+      if (s.includes('maintenance') || s.includes('workshop')) return { 
+          badge: 'bg-orange-100 text-orange-800', 
+          card: 'bg-orange-600', 
+          icon: <Wrench className="w-6 h-6"/> 
+      }
+      
+      // Default Blue for new/unknown statuses
+      return { 
+          badge: 'bg-blue-100 text-blue-800', 
+          card: 'bg-blue-600', 
+          icon: <Activity className="w-6 h-6"/> 
+      }
+  }
+
+  // --- OP CAT COLORS ---
   const getOpCatColor = (c: string) => {
       const cat = (c || '').toLowerCase()
       if (cat.includes('fully') || cat.includes('fmc')) return 'bg-blue-100 text-blue-800'
-      if (cat.includes('degraded')) return 'bg-amber-100 text-amber-900'
+      if (cat.includes('degraded')) return 'bg-amber-100 text-amber-900' 
       if (cat.includes('non') || cat.includes('nmc')) return 'bg-red-100 text-red-800'
       return 'bg-gray-100 text-gray-800'
   }
 
-  if (loading) return <div className="min-h-screen flex items-center justify-center bg-gray-100 font-bold text-xl">Loading...</div>
+  if (loading) return <div className="min-h-screen flex items-center justify-center bg-gray-100"><div className="text-xl font-black text-gray-900">Loading Command Dashboard...</div></div>
 
   return (
     <div className="min-h-screen bg-gray-100 p-4 md:p-8 pb-24">
-      <div className="flex justify-between items-center mb-6">
-        <div><h1 className="text-3xl font-black">COMMAND DASHBOARD</h1><p className="text-sm font-bold text-gray-500">Fleet Overview</p></div>
-        <div className="flex gap-2">
-           {role === 'super_admin' && <Link href="/admin/settings" className="btn-nav bg-gray-900 px-4 py-2 rounded text-white font-bold flex items-center"><Settings className="w-4 h-4 mr-2"/> Config</Link>}
-           <Link href="/analytics" className="btn-nav bg-purple-700 px-4 py-2 rounded text-white font-bold flex items-center"><BarChart3 className="w-4 h-4 mr-2"/> Analytics</Link>
-           <button onClick={() => {supabase.auth.signOut(); router.push('/login')}} className="btn-nav bg-red-600 px-4 py-2 rounded text-white font-bold flex items-center"><LogOut className="w-4 h-4 mr-2"/> Logout</button>
+      
+      {/* Top Bar */}
+      <div className="flex flex-col md:flex-row justify-between items-center mb-6 gap-4">
+        <div className="w-full md:w-auto">
+          <h1 className="text-2xl md:text-3xl font-black text-gray-900 tracking-tight">COMMAND DASHBOARD</h1>
+          <div className="flex items-center gap-2 mt-1">
+            <p className="text-gray-600 font-bold text-xs md:text-sm">Military Vehicle Accountability System</p>
+            {role && (
+                <span className={`px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-wider ${role === 'super_admin' ? 'bg-purple-100 text-purple-700' : 'bg-gray-200 text-gray-600'}`}>
+                    {role.replace('_', ' ')}
+                </span>
+            )}
+          </div>
+        </div>
+        
+        {/* Navigation Buttons (Restored Full List) */}
+        <div className="flex flex-wrap gap-2 w-full md:w-auto items-center justify-start md:justify-end">
+           {(role === 'super_admin' || role === 'admin' || role === 'tob_admin' || role === 'workshop_admin') && (
+               <Link href="/workshop" className="flex-1 md:flex-none flex items-center justify-center bg-orange-600 hover:bg-orange-700 text-white px-3 py-2 md:px-4 md:py-3 rounded-lg font-bold shadow-sm text-sm transition-colors">
+                  <Wrench className="w-4 h-4 md:w-5 md:h-5 mr-2" /> Workshop
+               </Link>
+           )}
+           {role === 'super_admin' && (
+                <>
+                    <Link href="/users" className="flex-1 md:flex-none flex items-center justify-center bg-purple-900 hover:bg-black text-white px-3 py-2 md:px-4 md:py-3 rounded-lg font-bold shadow-sm text-sm transition-colors">
+                        <Users className="w-4 h-4 md:w-5 md:h-5 mr-2" /> Users
+                    </Link>
+                    <Link href="/admin/settings" className="flex-1 md:flex-none flex items-center justify-center bg-gray-900 hover:bg-black text-white px-3 py-2 md:px-4 md:py-3 rounded-lg font-bold shadow-sm text-sm transition-colors">
+                        <Settings className="w-4 h-4 md:w-5 md:h-5 mr-2" /> Config
+                    </Link>
+                </>
+           )}
+           <Link href="/all-vehicles" className="flex-1 md:flex-none flex items-center justify-center bg-gray-800 hover:bg-black text-white px-3 py-2 md:px-4 md:py-3 rounded-lg font-bold shadow-sm text-sm transition-colors">
+             <Grid className="w-4 h-4 md:w-5 md:h-5 mr-2" /> All Vehicles
+           </Link>
+           <Link href="/vehicle-statistics" className="flex-1 md:flex-none flex items-center justify-center bg-teal-600 hover:bg-teal-700 text-white px-3 py-2 md:px-4 md:py-3 rounded-lg font-bold shadow-sm text-sm transition-colors">
+             <Table className="w-4 h-4 md:w-5 md:h-5 mr-2" /> Statistics
+           </Link>
+           <Link href="/analytics" className="flex-1 md:flex-none flex items-center justify-center bg-purple-700 hover:bg-purple-800 text-white px-3 py-2 md:px-4 md:py-3 rounded-lg font-bold shadow-sm text-sm transition-colors">
+             <BarChart3 className="w-4 h-4 md:w-5 md:h-5 mr-2" /> Analytics
+           </Link>
+           <button onClick={handleLogout} className="flex-1 md:flex-none flex items-center justify-center bg-red-600 hover:bg-red-700 text-white px-3 py-2 md:px-4 md:py-3 rounded-lg font-bold shadow-sm text-sm transition-colors">
+             <LogOut className="w-4 h-4 md:w-5 md:h-5 mr-2" /> Sign Out
+           </button>
         </div>
       </div>
 
-      {/* DYNAMIC CARDS */}
-      <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-4 mb-8">
-        <StatCard title="Total Fleet" value={vehicles.length} icon={<Car className="w-6 h-6"/>} color="bg-blue-600" isActive={statusFilter === 'ALL'} onClick={() => setStatusFilter('ALL')} />
-        {statusList.map((st) => {
-            const attr = getStatusAttr(st)
-            const count = vehicles.filter(v => v.status === st).length
-            return <StatCard key={st} title={st} value={count} icon={attr.icon} color={attr.card} isActive={statusFilter === st} onClick={() => setStatusFilter(st)} />
+      {/* DYNAMIC STATS CARDS GRID */}
+      <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-3 md:gap-4 mb-6 md:mb-8">
+        {/* Always show TOTAL first */}
+        <StatCard 
+            title="Total Fleet" 
+            value={vehicles.length} 
+            icon={<Car className="w-6 h-6"/>} 
+            color="bg-blue-600" 
+            isActive={statusFilter === 'ALL'}
+            onClick={() => setStatusFilter('ALL')}
+        />
+        
+        {/* Render Cards from Database */}
+        {statusList.map(statusName => {
+            const count = vehicles.filter(v => v.status === statusName).length
+            const style = getStatusAttributes(statusName)
+
+            return (
+                <StatCard 
+                    key={statusName}
+                    title={statusName} 
+                    value={count} 
+                    icon={style.icon} 
+                    color={style.card} 
+                    isActive={statusFilter === statusName}
+                    onClick={() => setStatusFilter(statusName)}
+                />
+            )
         })}
       </div>
 
-      <div className="bg-white rounded-xl shadow border border-gray-200 overflow-hidden">
-        <div className="p-4 border-b flex items-center"><Search className="w-5 h-5 text-gray-400 mr-2"/><input placeholder="Search..." className="outline-none font-bold w-full" onChange={e => setFilter(e.target.value)}/></div>
+      {/* SEARCH & TABLE SECTION */}
+      <div className="bg-white rounded-xl shadow-sm border border-gray-200 mb-4 md:mb-0">
+        <div className="p-4 md:p-5 flex items-center">
+          <Search className="w-5 h-5 text-gray-500 mr-3" />
+          <input 
+            type="text" 
+            placeholder="Search Vehicle ID..." 
+            className="w-full bg-transparent outline-none text-gray-900 font-bold placeholder-gray-400 text-base" 
+            onChange={(e) => setFilter(e.target.value)}
+          />
+          {statusFilter !== 'ALL' && (
+              <span className="ml-2 text-xs font-black uppercase px-3 py-1 bg-gray-900 text-white rounded-full whitespace-nowrap animate-pulse">
+                  Filter: {statusFilter}
+              </span>
+          )}
+        </div>
+      </div>
+
+      <div className="hidden md:block bg-white rounded-b-xl shadow-lg border-t-0 border border-gray-200 overflow-hidden">
         <div className="overflow-x-auto">
-          <table className="w-full text-left">
-            <thead className="bg-gray-50 text-xs font-black uppercase text-gray-500"><tr><th className="p-4">ID</th><th className="p-4">Type</th><th className="p-4">Location</th><th className="p-4">Status</th><th className="p-4">Readiness</th><th className="p-4">Action</th></tr></thead>
-            <tbody className="divide-y">
-              {filteredVehicles.map(v => (
-                <tr key={v.id} className="hover:bg-gray-50">
-                  <td className="p-4 font-black">{v.vehicle_uid}</td>
-                  <td className="p-4 font-bold text-gray-600">{v.vehicle_type_name}</td>
-                  <td className="p-4 font-bold text-gray-600"><MapPin className="w-3 h-3 inline mr-1 opacity-50"/>{v.tob}</td>
-                  <td className="p-4"><span className={`px-2 py-1 rounded text-xs font-black uppercase ${getStatusAttr(v.status).badge}`}>{v.status}</span></td>
-                  <td className="p-4"><span className={`px-2 py-1 rounded text-xs font-black uppercase ${getOpCatColor(v.operational_category)}`}>{v.operational_category}</span></td>
-                  <td className="p-4"><Link href={`/vehicle/${v.id}`} className="border px-3 py-1 rounded font-bold text-xs uppercase hover:bg-black hover:text-white transition">View</Link></td>
+          <table className="w-full text-left border-collapse">
+            <thead className="bg-gray-50 text-gray-500 uppercase text-xs font-extrabold tracking-wider">
+              <tr>
+                <th className="px-6 py-4 border-b border-gray-100">Vehicle ID</th>
+                <th className="px-6 py-4 border-b border-gray-100">Type</th>
+                <th className="px-6 py-4 border-b border-gray-100">Location</th>
+                <th className="px-6 py-4 border-b border-gray-100">Status</th>
+                <th className="px-6 py-4 border-b border-gray-100">Operational Category</th>
+                <th className="px-6 py-4 border-b border-gray-100 text-right">Action</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-100 bg-white">
+              {filteredVehicles.map((vehicle: any) => (
+                <tr key={vehicle.id} className="hover:bg-blue-50 transition-colors group">
+                  <td className="px-6 py-4 font-black text-gray-900 whitespace-nowrap text-lg">{vehicle.vehicle_uid}</td>
+                  <td className="px-6 py-4 font-bold text-gray-600 whitespace-nowrap">{vehicle.vehicle_type_name || '---'}</td>
+                  <td className="px-6 py-4 font-bold text-gray-600 whitespace-nowrap"><span className="flex items-center"><MapPin className="w-3 h-3 mr-1 opacity-50"/> {vehicle.tob || '---'}</span></td>
+                  
+                  {/* DYNAMIC STATUS BADGE */}
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold uppercase tracking-wide ${getStatusAttributes(vehicle.status).badge}`}>
+                        {vehicle.status}
+                    </span>
+                  </td>
+
+                  {/* DYNAMIC OP CAT BADGE */}
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold uppercase tracking-wide ${getOpCatColor(vehicle.operational_category)}`}>
+                        {vehicle.operational_category}
+                    </span>
+                  </td>
+
+                  <td className="px-6 py-4 text-right whitespace-nowrap"><Link href={`/vehicle/${vehicle.id}`} className="inline-block bg-white border-2 border-gray-200 group-hover:border-black text-black px-4 py-1.5 rounded-md font-bold text-xs uppercase tracking-wide transition-all">View</Link></td>
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
       </div>
-      <Link href="/add-vehicle" className="fixed bottom-6 right-6 bg-blue-600 text-white w-14 h-14 rounded-full shadow-2xl flex items-center justify-center hover:scale-105 transition"><Plus className="w-8 h-8" /></Link>
+
+      {/* MOBILE LIST */}
+      <div className="md:hidden mt-4 space-y-3">
+         {filteredVehicles.map((vehicle: any) => (
+            <div key={vehicle.id} className="bg-white p-4 rounded-lg shadow-sm border border-gray-200 flex flex-col gap-3">
+                <div className="flex justify-between items-start">
+                    <div>
+                        <span className="text-xl font-black text-gray-900 block">{vehicle.vehicle_uid}</span>
+                        <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">{vehicle.vehicle_type_name}</span>
+                    </div>
+                    <div className="flex flex-col items-end gap-1">
+                        {/* Status Badge */}
+                        <span className={`px-2 py-0.5 rounded text-[10px] font-black uppercase ${getStatusAttributes(vehicle.status).badge}`}>{vehicle.status}</span>
+                        {/* Op Cat Badge */}
+                        <span className={`px-2 py-0.5 rounded text-[10px] font-black uppercase ${getOpCatColor(vehicle.operational_category)}`}>{vehicle.operational_category}</span>
+                    </div>
+                </div>
+                <div className="flex items-center justify-between text-sm font-bold text-gray-600 bg-gray-50 p-2 rounded"><span className="flex items-center"><MapPin className="w-4 h-4 mr-1 text-gray-400"/> {vehicle.tob}</span></div>
+                <Link href={`/vehicle/${vehicle.id}`} className="w-full bg-black text-white text-center py-3 rounded-lg font-bold text-sm uppercase tracking-wide active:bg-gray-800">View Profile</Link>
+            </div>
+         ))}
+      </div>
+      
+      <Link href="/add-vehicle" className="fixed bottom-6 right-6 bg-blue-600 hover:bg-blue-700 text-white w-14 h-14 rounded-full shadow-2xl transition-transform active:scale-95 flex items-center justify-center z-50"><Plus className="w-8 h-8" /></Link>
     </div>
   )
 }
 
 function StatCard({ title, value, icon, color, onClick, isActive }: any) {
   return (
-    <button onClick={onClick} className={`${color} ${isActive ? 'ring-4 ring-offset-2 ring-gray-400' : ''} text-white p-4 rounded-xl shadow relative overflow-hidden text-left h-24 hover:scale-[1.02] transition-all w-full`}>
-      <div className="relative z-10"><p className="text-xs font-black opacity-80 uppercase">{title}</p><p className="text-3xl font-black">{value}</p></div>
-      <div className="absolute -bottom-2 -right-2 bg-white/20 p-2 rounded-full rotate-12">{icon}</div>
+    <button onClick={onClick} className={`${color} ${isActive ? 'ring-4 ring-offset-2 ring-gray-400 scale-[1.02]' : 'hover:scale-[1.02]'} transition-all duration-200 rounded-xl shadow-sm p-4 text-white flex flex-col justify-between h-24 relative overflow-hidden text-left w-full group`}>
+      <div className="z-10"><p className="text-[10px] md:text-xs font-black opacity-80 uppercase tracking-wider">{title}</p><p className="text-2xl md:text-3xl font-black mt-0.5">{value}</p></div>
+      <div className="absolute -bottom-2 -right-2 p-3 bg-white/10 rounded-full z-0 transform rotate-12 group-hover:scale-110 transition-transform">{icon}</div>
     </button>
   )
 }
