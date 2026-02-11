@@ -16,7 +16,7 @@ export default function Dashboard() {
   const [filter, setFilter] = useState('')
   const [role, setRole] = useState('') 
 
-  // --- DYNAMIC LISTS ---
+  // --- DYNAMIC STATUS LIST (From DB) ---
   const [statusList, setStatusList] = useState<string[]>([])
   const [statusFilter, setStatusFilter] = useState('ALL') 
 
@@ -37,14 +37,15 @@ export default function Dashboard() {
     
     if (profile) {
         setRole(profile.role)
-        // --- REDIRECT VEHICLE USERS ---
+
+        // --- CRITICAL FIX: REDIRECT VEHICLE USERS ---
         if (profile.role === 'vehicle_user' && profile.assigned_vehicle_id) {
             router.replace(`/vehicle/${profile.assigned_vehicle_id}`)
-            return 
+            return // Stop execution here so dashboard doesn't flash
         }
     }
 
-    // 2. Fetch Dynamic Statuses
+    // 2. Fetch Dynamic Statuses (This ensures new DB rows appear as Cards)
     const { data: sData } = await supabase.from('vehicle_statuses').select('name').order('sort_order')
     if (sData) setStatusList(sData.map((s: any) => s.name))
 
@@ -68,38 +69,42 @@ export default function Dashboard() {
 
   // --- DYNAMIC FILTERING ---
   const filteredVehicles = vehicles.filter(v => {
+    // Text Search
     const matchesText = (v.vehicle_uid || '').toLowerCase().includes(filter.toLowerCase()) ||
                         (v.vehicle_type_name || '').toLowerCase().includes(filter.toLowerCase()) ||
                         (v.tob || '').toLowerCase().includes(filter.toLowerCase())
 
+    // Dynamic Status Filter
     const matchesStatus = statusFilter === 'ALL' ? true : v.status === statusFilter
+
     return matchesText && matchesStatus
   })
 
-  // --- SMART ATTRIBUTES (FIXED INACTIVE COLOR) ---
+  // --- SMART ATTRIBUTES GENERATOR ---
+  // This logic automatically styles new statuses based on their name keywords
   const getStatusAttributes = (name: string) => {
       const s = (name || '').toLowerCase()
       
-      // FIX: Check INACTIVE first (because "inactive" contains the word "active")
-      if (s.includes('inactive') || s.includes('off road')) return { 
-          badge: 'bg-red-100 text-red-800', 
-          card: 'bg-red-600', 
-          icon: <XCircle className="w-6 h-6"/> 
-      }
-      // Then check ACTIVE
+      // 1. ACTIVE Variants (Green)
       if (s.includes('active')) return { 
           badge: 'bg-green-100 text-green-800', 
           card: 'bg-green-600', 
           icon: <CheckCircle className="w-6 h-6"/> 
       }
-      // Then MAINTENANCE
+      // 2. INACTIVE Variants (Red)
+      if (s.includes('inactive') || s.includes('off road')) return { 
+          badge: 'bg-red-100 text-red-800', 
+          card: 'bg-red-600', 
+          icon: <XCircle className="w-6 h-6"/> 
+      }
+      // 3. MAINTENANCE Variants (Orange)
       if (s.includes('maintenance') || s.includes('workshop')) return { 
           badge: 'bg-orange-100 text-orange-800', 
           card: 'bg-orange-600', 
           icon: <Wrench className="w-6 h-6"/> 
       }
       
-      // Default Blue for new/unknown statuses
+      // 4. DEFAULT/UNKNOWN Variants (Blue) - Handles new categories like 'Limited Range'
       return { 
           badge: 'bg-blue-100 text-blue-800', 
           card: 'bg-blue-600', 
@@ -107,12 +112,13 @@ export default function Dashboard() {
       }
   }
 
-  // --- OP CAT COLORS ---
+  // --- OP CATEGORY COLOR HELPER ---
   const getOpCatColor = (c: string) => {
       const cat = (c || '').toLowerCase()
       if (cat.includes('fully') || cat.includes('fmc')) return 'bg-blue-100 text-blue-800'
       if (cat.includes('degraded')) return 'bg-amber-100 text-amber-900' 
       if (cat.includes('non') || cat.includes('nmc')) return 'bg-red-100 text-red-800'
+      // Default for unknown op categories
       return 'bg-gray-100 text-gray-800'
   }
 
@@ -135,7 +141,7 @@ export default function Dashboard() {
           </div>
         </div>
         
-        {/* Navigation Buttons (Restored Full List) */}
+        {/* Navigation Buttons */}
         <div className="flex flex-wrap gap-2 w-full md:w-auto items-center justify-start md:justify-end">
            {(role === 'super_admin' || role === 'admin' || role === 'tob_admin' || role === 'workshop_admin') && (
                <Link href="/workshop" className="flex-1 md:flex-none flex items-center justify-center bg-orange-600 hover:bg-orange-700 text-white px-3 py-2 md:px-4 md:py-3 rounded-lg font-bold shadow-sm text-sm transition-colors">
@@ -168,8 +174,9 @@ export default function Dashboard() {
       </div>
 
       {/* DYNAMIC STATS CARDS GRID */}
+      {/* Automatically creates a card for EVERY status found in the database */}
       <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-3 md:gap-4 mb-6 md:mb-8">
-        {/* Always show TOTAL first */}
+        {/* 1. Total Fleet (Static First Card) */}
         <StatCard 
             title="Total Fleet" 
             value={vehicles.length} 
@@ -179,18 +186,18 @@ export default function Dashboard() {
             onClick={() => setStatusFilter('ALL')}
         />
         
-        {/* Render Cards from Database */}
+        {/* 2. Dynamic Cards from DB */}
         {statusList.map(statusName => {
             const count = vehicles.filter(v => v.status === statusName).length
-            const style = getStatusAttributes(statusName)
+            const styles = getStatusAttributes(statusName)
 
             return (
                 <StatCard 
                     key={statusName}
                     title={statusName} 
                     value={count} 
-                    icon={style.icon} 
-                    color={style.card} 
+                    icon={styles.icon} 
+                    color={styles.card} 
                     isActive={statusFilter === statusName}
                     onClick={() => setStatusFilter(statusName)}
                 />
@@ -236,14 +243,14 @@ export default function Dashboard() {
                   <td className="px-6 py-4 font-bold text-gray-600 whitespace-nowrap">{vehicle.vehicle_type_name || '---'}</td>
                   <td className="px-6 py-4 font-bold text-gray-600 whitespace-nowrap"><span className="flex items-center"><MapPin className="w-3 h-3 mr-1 opacity-50"/> {vehicle.tob || '---'}</span></td>
                   
-                  {/* DYNAMIC STATUS BADGE */}
+                  {/* DYNAMIC STATUS BADGE - Uses smart attributes for automatic coloring */}
                   <td className="px-6 py-4 whitespace-nowrap">
                     <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold uppercase tracking-wide ${getStatusAttributes(vehicle.status).badge}`}>
                         {vehicle.status}
                     </span>
                   </td>
 
-                  {/* DYNAMIC OP CAT BADGE */}
+                  {/* DYNAMIC OP CAT BADGE - Uses smart coloring */}
                   <td className="px-6 py-4 whitespace-nowrap">
                     <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold uppercase tracking-wide ${getOpCatColor(vehicle.operational_category)}`}>
                         {vehicle.operational_category}
