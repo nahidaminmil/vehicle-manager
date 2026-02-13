@@ -102,7 +102,8 @@ export default function AllVehiclesPage() {
 
   // --- 1. HELPER FOR STATUS COLORS (Image Badge) ---
   const getStatusColor = (status: string) => {
-    if (status === 'Active') return 'bg-green-600 text-white border-green-700'
+    if (status === 'Active Long Range') return 'bg-green-600 text-white border-green-700'
+    if (status === 'Active Short Range') return 'bg-teal-600 text-white border-teal-700'
     if (status === 'Maintenance') return 'bg-orange-500 text-white border-orange-600'
     if (status === 'Inactive') return 'bg-red-600 text-white border-red-700'
     return 'bg-gray-500 text-white border-gray-600'
