@@ -92,14 +92,14 @@ export default function Dashboard() {
       }
 
       // 2. SHORT RANGE (Teal) - Specific Check for new category
-      if (s.includes('short range')) return { 
+      if (s.includes('active short range')) return { 
           badge: 'bg-teal-100 text-teal-800', 
           card: 'bg-teal-600', 
           icon: <CheckCircle className="w-6 h-6"/> 
       }
       
       // 3. ACTIVE Variants (Green) - General Check
-      if (s.includes('active')) return { 
+      if (s.includes('active long range')) return { 
           badge: 'bg-green-100 text-green-800', 
           card: 'bg-green-600', 
           icon: <CheckCircle className="w-6 h-6"/> 
