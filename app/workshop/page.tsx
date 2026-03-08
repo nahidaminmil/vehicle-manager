@@ -197,13 +197,27 @@ function JobCard({ log, onMove, moveLabel, moveColor, isResolved }: any) {
        </div>
 
        {/* 5. FOOTER: Date */}
-       <div className="flex items-center justify-end text-sm text-gray-500 font-bold">
-          <Clock className="w-4 h-4 mr-1 text-gray-400" />
-          Reported: {new Date(log.created_at).toLocaleString([], {
-            dateStyle: 'short', 
-            timeStyle: 'short'
-          })}
-       </div>
+        <div className="flex items-center justify-between text-[10px] md:text-xm text-gray-600 font-bold mt-2">
+          {/* Left Aligned: Reported Date */}
+          <div className="flex items-center">
+            <Clock className="w-4 h-4 mr-1 text-gray-600" />
+            <span>Reported: {new Date(log.created_at).toLocaleString([], {
+              dateStyle: 'short', 
+              timeStyle: 'short'
+            })}</span>
+          </div>
+
+          {/* Right Aligned: Updated Date */}
+          {log.updated_at && (
+          <div className="flex items-center text-orange-600">
+            <Activity className="w-4 h-4 mr-1" />
+            <span>Updated: {new Date(log.updated_at).toLocaleString([], {
+              dateStyle: 'short', 
+              timeStyle: 'short'
+            })}</span>
+          </div>
+          )}
+        </div>
 
        {/* 6. ACTION BUTTON */}
        {!isResolved && (
