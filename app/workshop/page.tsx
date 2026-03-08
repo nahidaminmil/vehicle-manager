@@ -146,7 +146,7 @@ function JobCard({ log, onMove, moveLabel, moveColor, isResolved }: any) {
   
   // --- CALCULATE DAYS COUNT ---
   const getDaysCount = () => {
-      const start = new Date(log.created_at).getTime()
+      const start = new Date(log.logged_date).getTime()
       // If resolved, stop counting at 'updated_at' (completion time). If active, count to NOW.
       const end = (isResolved && log.updated_at) ? new Date(log.updated_at).getTime() : new Date().getTime()
       
@@ -197,27 +197,21 @@ function JobCard({ log, onMove, moveLabel, moveColor, isResolved }: any) {
        </div>
 
        {/* 5. FOOTER: Date */}
-        <div className="flex items-center justify-between text-[10px] md:text-xs text-gray-600 font-bold mt-2">
-          {/* Left Aligned: Reported Date */}
-          <div className="flex items-center">
-            <Clock className="w-4 h-4 mr-1 text-gray-500" />
-            <span>Reported: {new Date(log.created_at).toLocaleString([], {
-              dateStyle: 'short', 
-              timeStyle: 'short'
-            })}</span>
-          </div>
+       <div className="flex items-center justify-end text-sm text-gray-500 font-bold">
+          <Clock className="w-4 h-4 mr-1" />
+          Reported: {new Date(log.created_at).toLocaleString([], {
+            dateStyle: 'short',
+            timeStyle: 'short'
+          })}
+       </div>
 
-          {/* Right Aligned: Updated Date */}
-          {log.updated_at && (
-          <div className="flex items-center text-orange-500">
-            <Activity className="w-4 h-4 mr-1" />
-            <span>Updated: {new Date(log.updated_at).toLocaleString([], {
-              dateStyle: 'short', 
-              timeStyle: 'short'
-            })}</span>
-          </div>
-          )}
-        </div>
+        <div className="flex items-center justify-end text-sm text-blue-500 font-bold">
+          <Activity className="w-4 h-4 mr-1" />
+          Reported: {new Date(log.updated_at).toLocaleString([], {
+            dateStyle: 'short',
+            timeStyle: 'short'
+          })}
+       </div>
 
        {/* 6. ACTION BUTTON */}
        {!isResolved && (
