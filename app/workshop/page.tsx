@@ -197,9 +197,12 @@ function JobCard({ log, onMove, moveLabel, moveColor, isResolved }: any) {
        </div>
 
        {/* 5. FOOTER: Date */}
-       <div className="flex items-center justify-end text-[10px] text-gray-400 font-medium">
-          <Clock className="w-3 h-3 mr-1" />
-          Reported: {new Date(log.logged_date).toLocaleDateString()}
+       <div className="flex items-center justify-end text-sm text-gray-500 font-bold">
+          <Clock className="w-4 h-4 mr-1 text-gray-400" />
+          Reported: {new Date(log.created_at).toLocaleString([], {
+            dateStyle: 'short', 
+            timeStyle: 'short'
+          })}
        </div>
 
        {/* 6. ACTION BUTTON */}
