@@ -146,7 +146,7 @@ function JobCard({ log, onMove, moveLabel, moveColor, isResolved }: any) {
   
   // --- CALCULATE DAYS COUNT ---
   const getDaysCount = () => {
-      const start = new Date(log.logged_date).getTime()
+      const start = new Date(log.created_at).getTime()
       // If resolved, stop counting at 'updated_at' (completion time). If active, count to NOW.
       const end = (isResolved && log.updated_at) ? new Date(log.updated_at).getTime() : new Date().getTime()
       
