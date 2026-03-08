@@ -207,7 +207,7 @@ function JobCard({ log, onMove, moveLabel, moveColor, isResolved }: any) {
 
         <div className="flex items-center justify-end text-sm text-blue-500 font-bold">
           <Activity className="w-4 h-4 mr-1" />
-          Reported: {new Date(log.updated_at).toLocaleString([], {
+          Updated: {new Date(log.logged_date).toLocaleString([], {
             dateStyle: 'short',
             timeStyle: 'short'
           })}
