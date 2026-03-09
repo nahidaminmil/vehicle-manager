@@ -70,8 +70,11 @@ export default function VehicleDetails() {
   // --- SMART COLOR HELPERS ---
   const getStatusColorClass = (s: string) => {
       const sl = (s || '').toLowerCase()
-      // Check INACTIVE first so it doesn't get caught by 'active' logic
+      // Check INACTIVE first
       if(sl.includes('inactive')) return 'bg-red-100 text-red-800'
+      // Check SHORT RANGE (Teal color)
+      if(sl.includes('short range')) return 'bg-teal-100 text-teal-800'
+      // Check ACTIVE
       if(sl.includes('active')) return 'bg-green-100 text-green-800'
       if(sl.includes('maintenance')) return 'bg-orange-100 text-orange-800'
       return 'bg-blue-100 text-blue-800' 
@@ -98,12 +101,10 @@ export default function VehicleDetails() {
     if (locData) setTobList(locData.map((l: any) => l.name))
 
     const { data: statusData } = await supabase.from('vehicle_statuses').select('name').order('sort_order')
-    // Extract valid names for validation logic
     const validStatusNames = statusData ? statusData.map((s: any) => s.name) : []
     if (statusData) setStatusList(validStatusNames)
 
     const { data: opData } = await supabase.from('operational_categories').select('name').order('sort_order')
-    // Extract valid names for validation logic
     const validOpCatNames = opData ? opData.map((o: any) => o.name) : []
     if (opData) setOpCatList(validOpCatNames)
 
@@ -133,8 +134,6 @@ export default function VehicleDetails() {
           setEvidence(grouped)
       }
 
-      // --- CRITICAL AUTO-CORRECT LOGIC ---
-      // This solves the issue where old data (e.g. "Active") conflicts with new rules ("Active Long Range")
       const currentStatusValid = validStatusNames.includes(vehicleData.status)
       const currentOpCatValid = validOpCatNames.includes(vehicleData.operational_category)
 
@@ -143,13 +142,8 @@ export default function VehicleDetails() {
         tob: vehicleData.tob || (locData && locData[0]?.name) || '',
         vehicle_type_id: vehicleData.vehicle_type_id || '', 
         mileage: vehicleData.mileage || 0,
-        
-        // If current status is NOT in the new list, switch to the first valid one automatically
         status: currentStatusValid ? vehicleData.status : (validStatusNames[0] || ''),
-        
-        // Same logic for Operational Category
         operational_category: currentOpCatValid ? vehicleData.operational_category : (validOpCatNames[0] || ''),
-        
         description: vehicleData.description || '',
         updater_un_id: vehicleData.last_updated_by_un_id || ''
       })
@@ -272,7 +266,6 @@ export default function VehicleDetails() {
         }
     }
 
-    // Update with auto-corrected status if needed
     const { error } = await supabase.from('vehicles').update({
         vehicle_uid: editFormData.vehicle_uid,
         tob: editFormData.tob,
@@ -417,8 +410,10 @@ export default function VehicleDetails() {
   if (loading) return <div className="p-8 font-bold text-xl">Loading...</div>
   if (!vehicle) return <div className="p-8 font-bold text-xl text-red-600">Vehicle not found</div>
 
-  const isWorkshopAdmin = (userRole === 'workshop_admin' || userRole === 'super_admin')
-  const isSuperAdmin = (userRole === 'super_admin')
+  // ROLE CHECKS
+  const isGuest = userRole === 'guest'
+  const isWorkshopAdmin = (!isGuest && (userRole === 'workshop_admin' || userRole === 'super_admin'))
+  const isSuperAdmin = (!isGuest && userRole === 'super_admin')
 
   return (
     <div className="min-h-screen bg-gray-100 p-4 pb-24">
@@ -436,10 +431,12 @@ export default function VehicleDetails() {
       <div className="bg-white rounded-lg shadow-md overflow-hidden mb-6 p-4 border-t-4 border-blue-600">
         <div className="flex justify-between items-center mb-4">
             <h2 className="text-lg font-black text-gray-800 flex items-center"><Camera className="w-5 h-5 mr-2"/> Profile Photos ({gallery.length}/10)</h2>
-            <label className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-2 rounded-md cursor-pointer flex items-center text-sm font-bold shadow-sm transition-colors">
-                <Plus className="w-4 h-4 mr-1" /> Add Photo
-                <input type="file" accept="image/*" capture="environment" className="hidden" onChange={handleMainUpload} disabled={uploading || gallery.length >= 10} />
-            </label>
+            {!isGuest && (
+                <label className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-2 rounded-md cursor-pointer flex items-center text-sm font-bold shadow-sm transition-colors">
+                    <Plus className="w-4 h-4 mr-1" /> Add Photo
+                    <input type="file" accept="image/*" capture="environment" className="hidden" onChange={handleMainUpload} disabled={uploading || gallery.length >= 10} />
+                </label>
+            )}
         </div>
         <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
             {gallery.length === 0 && <div className="col-span-full h-32 bg-gray-50 rounded-lg border-2 border-dashed border-gray-300 flex items-center justify-center text-gray-400 font-bold">No profile photos yet.</div>}
@@ -449,7 +446,9 @@ export default function VehicleDetails() {
                     <div className="absolute inset-0 bg-black/20 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
                         <Maximize2 className="text-white w-6 h-6 drop-shadow-md"/>
                     </div>
-                    <button onClick={(e) => { e.stopPropagation(); deleteGalleryPhoto(p.id); }} className="absolute top-1 right-1 bg-red-600/80 hover:bg-red-600 text-white p-1.5 rounded-full opacity-0 group-hover:opacity-100 transition-opacity z-10"><Trash2 className="w-3 h-3" /></button>
+                    {!isGuest && (
+                        <button onClick={(e) => { e.stopPropagation(); deleteGalleryPhoto(p.id); }} className="absolute top-1 right-1 bg-red-600/80 hover:bg-red-600 text-white p-1.5 rounded-full opacity-0 group-hover:opacity-100 transition-opacity z-10"><Trash2 className="w-3 h-3" /></button>
+                    )}
                 </div>
             ))}
         </div>
@@ -463,9 +462,10 @@ export default function VehicleDetails() {
                 {vehicle.auto_email && (
                     <button onClick={() => setShowQr(true)} className="bg-gray-100 hover:bg-gray-200 text-gray-700 p-2 rounded shadow-sm border border-gray-300"><QrCode className="w-4 h-4" /></button>
                 )}
-                {!isEditing ? (
+                {!isGuest && !isEditing && (
                     <button onClick={() => setIsEditing(true)} className="text-blue-700 flex items-center text-sm font-bold bg-blue-50 px-3 py-1 rounded hover:bg-blue-100"><Edit2 className="w-4 h-4 mr-1" /> Edit Profile</button>
-                ) : (
+                )}
+                {!isGuest && isEditing && (
                     <div className="flex gap-2">
                         <button onClick={() => setIsEditing(false)} className="text-gray-600 bg-gray-100 px-3 py-1 rounded font-bold flex items-center"><X className="w-4 h-4 mr-1" /> Cancel</button>
                         <button onClick={saveProfile} disabled={uploading} className="text-white bg-green-600 px-3 py-1 rounded font-bold flex items-center hover:bg-green-700">{uploading ? 'Saving...' : <><Save className="w-4 h-4 mr-1" /> Save</>}</button>
@@ -567,72 +567,74 @@ export default function VehicleDetails() {
         </div>
       </div>
 
-      {/* 3. REPORT NEW ISSUE */}
-      <div className="bg-white p-6 rounded-lg shadow-md mb-8 border-t-4 border-orange-500">
-          <h2 className="text-xl font-black mb-4 flex items-center text-orange-700"><AlertTriangle className="w-6 h-6 mr-2" /> Report New Issue</h2>
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              <div className="space-y-4">
-                  <div>
-                      <p className="text-xs font-bold text-gray-500 uppercase mb-1">1. Fault Description (Required)</p>
-                      <textarea value={remark} onChange={(e) => setRemark(e.target.value)} className="w-full p-3 border-2 border-gray-300 rounded-md h-24 font-bold focus:border-orange-500 text-gray-900" placeholder="Describe fault..." />
-                  </div>
-                  <div className="grid grid-cols-2 gap-2">
-                        <div><p className="text-xs font-bold text-gray-500 uppercase mb-1">Priority</p><select value={priority} onChange={(e) => setPriority(e.target.value)} className="w-full p-2 border-2 border-gray-300 rounded font-bold text-gray-900"><option value="Low">Low</option><option value="Routine">Routine</option><option value="Critical">Critical</option></select></div>
-                        <div><p className="text-xs font-bold text-gray-500 uppercase mb-1">Photo Evidence</p><label className="cursor-pointer w-full flex items-center justify-center p-2 border-2 border-dashed border-gray-400 rounded hover:bg-gray-50 bg-white"><Camera className="w-4 h-4 mr-2 text-gray-600"/><span className="text-xs font-bold text-gray-700 truncate">{logFile ? "Photo Selected" : "Take Photo"}</span><input type="file" accept="image/*" capture="environment" className="hidden" onChange={(e) => setLogFile(e.target.files ? e.target.files[0] : null)} /></label></div>
-                  </div>
-              </div>
-              <div className="space-y-3">
-                  <div className="bg-gray-50 p-4 rounded-lg border border-gray-200 space-y-3">
-                      <h3 className="text-sm font-black uppercase text-gray-400 flex items-center"><User className="w-4 h-4 mr-1"/> Maintenance Details</h3>
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                          <input type="text" value={actionReq} onChange={(e) => setActionReq(e.target.value)} className="w-full p-2 border rounded font-bold text-sm text-gray-900" placeholder="Action Required" />
-                          <input type="text" value={responsible} onChange={(e) => setResponsible(e.target.value)} className="w-full p-2 border rounded font-bold text-sm text-gray-900" placeholder="Resp. Person" />
+      {/* 3. REPORT NEW ISSUE (HIDDEN FOR GUESTS) */}
+      {!isGuest && (
+          <div className="bg-white p-6 rounded-lg shadow-md mb-8 border-t-4 border-orange-500">
+              <h2 className="text-xl font-black mb-4 flex items-center text-orange-700"><AlertTriangle className="w-6 h-6 mr-2" /> Report New Issue</h2>
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                  <div className="space-y-4">
+                      <div>
+                          <p className="text-xs font-bold text-gray-500 uppercase mb-1">1. Fault Description (Required)</p>
+                          <textarea value={remark} onChange={(e) => setRemark(e.target.value)} className="w-full p-3 border-2 border-gray-300 rounded-md h-24 font-bold focus:border-orange-500 text-gray-900" placeholder="Describe fault..." />
                       </div>
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                          <input type="number" value={estDays} onChange={(e) => setEstDays(e.target.value)} className="w-full p-2 border rounded font-bold text-sm text-gray-900" placeholder="Est. Repair Days" />
-                          <select value={maintStatus} onChange={(e) => setMaintStatus(e.target.value)} className="w-full p-2 border rounded font-bold text-sm text-gray-900"><option value="Pending">Status: Pending</option><option value="In Progress">Status: In Progress</option><option value="Resolved">Status: Resolved</option></select>
+                      <div className="grid grid-cols-2 gap-2">
+                            <div><p className="text-xs font-bold text-gray-500 uppercase mb-1">Priority</p><select value={priority} onChange={(e) => setPriority(e.target.value)} className="w-full p-2 border-2 border-gray-300 rounded font-bold text-gray-900"><option value="Low">Low</option><option value="Routine">Routine</option><option value="Critical">Critical</option></select></div>
+                            <div><p className="text-xs font-bold text-gray-500 uppercase mb-1">Photo Evidence</p><label className="cursor-pointer w-full flex items-center justify-center p-2 border-2 border-dashed border-gray-400 rounded hover:bg-gray-50 bg-white"><Camera className="w-4 h-4 mr-2 text-gray-600"/><span className="text-xs font-bold text-gray-700 truncate">{logFile ? "Photo Selected" : "Take Photo"}</span><input type="file" accept="image/*" capture="environment" className="hidden" onChange={(e) => setLogFile(e.target.files ? e.target.files[0] : null)} /></label></div>
                       </div>
-                      <input type="text" value={officerRemarks} onChange={(e) => setOfficerRemarks(e.target.value)} className="w-full p-2 border rounded font-bold text-sm text-gray-900" placeholder="Workshop Remarks" />
-                      <input type="text" value={genNotes} onChange={(e) => setGenNotes(e.target.value)} className="w-full p-2 border rounded font-bold text-sm text-gray-900" placeholder="Other Notes" />
                   </div>
+                  <div className="space-y-3">
+                      <div className="bg-gray-50 p-4 rounded-lg border border-gray-200 space-y-3">
+                          <h3 className="text-sm font-black uppercase text-gray-400 flex items-center"><User className="w-4 h-4 mr-1"/> Maintenance Details</h3>
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                              <input type="text" value={actionReq} onChange={(e) => setActionReq(e.target.value)} className="w-full p-2 border rounded font-bold text-sm text-gray-900" placeholder="Action Required" />
+                              <input type="text" value={responsible} onChange={(e) => setResponsible(e.target.value)} className="w-full p-2 border rounded font-bold text-sm text-gray-900" placeholder="Resp. Person" />
+                          </div>
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                              <input type="number" value={estDays} onChange={(e) => setEstDays(e.target.value)} className="w-full p-2 border rounded font-bold text-sm text-gray-900" placeholder="Est. Repair Days" />
+                              <select value={maintStatus} onChange={(e) => setMaintStatus(e.target.value)} className="w-full p-2 border rounded font-bold text-sm text-gray-900"><option value="Pending">Status: Pending</option><option value="In Progress">Status: In Progress</option><option value="Resolved">Status: Resolved</option></select>
+                          </div>
+                          <input type="text" value={officerRemarks} onChange={(e) => setOfficerRemarks(e.target.value)} className="w-full p-2 border rounded font-bold text-sm text-gray-900" placeholder="Workshop Remarks" />
+                          <input type="text" value={genNotes} onChange={(e) => setGenNotes(e.target.value)} className="w-full p-2 border rounded font-bold text-sm text-gray-900" placeholder="Other Notes" />
+                      </div>
 
-                  {/* REPORTED BY SECTION */}
-                  <div className="bg-blue-50 p-4 rounded-lg border border-blue-200 space-y-3">
-                      <h3 className="text-sm font-black uppercase text-blue-600 flex items-center"><FileBadge className="w-4 h-4 mr-1"/> Reported By (Mandatory)</h3>
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                          <div>
-                              <label className="text-[10px] font-bold text-gray-500 uppercase">UN ID Number</label>
-                              <input type="text" value={reporterUnId} onChange={(e) => setReporterUnId(e.target.value)} className="w-full p-2 border rounded font-bold text-sm text-gray-900 border-blue-300" placeholder="M-12345678" />
-                          </div>
-                          <div>
-                              <label className="text-[10px] font-bold text-gray-500 uppercase mb-1 block">Photo of UN ID</label>
-                              <label className="cursor-pointer w-full flex items-center justify-center p-2 border-2 border-dashed border-blue-300 rounded hover:bg-blue-100 bg-white transition-colors relative">
-                                  <Camera className="w-4 h-4 mr-2 text-blue-500"/>
-                                  <span className={`text-xs font-bold truncate ${reporterPhotoFile ? 'text-green-600' : 'text-blue-500'}`}>
-                                      {reporterPhotoFile ? "ID Photo Selected" : "Upload / Take Photo"}
-                                  </span>
-                                  <input type="file" accept="image/*" capture="environment" className="hidden" onChange={(e) => setReporterPhotoFile(e.target.files ? e.target.files[0] : null)} />
-                                  
-                                  {/* CLEAR BUTTON */}
-                                  {reporterPhotoFile && (
-                                      <button 
-                                        onClick={(e) => {
-                                            e.preventDefault(); e.stopPropagation();
-                                            setReporterPhotoFile(null);
-                                        }}
-                                        className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1 shadow-sm hover:bg-red-600"
-                                      >
-                                          <X className="w-3 h-3"/>
-                                      </button>
-                                  )}
-                              </label>
+                      {/* REPORTED BY SECTION */}
+                      <div className="bg-blue-50 p-4 rounded-lg border border-blue-200 space-y-3">
+                          <h3 className="text-sm font-black uppercase text-blue-600 flex items-center"><FileBadge className="w-4 h-4 mr-1"/> Reported By (Mandatory)</h3>
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                              <div>
+                                  <label className="text-[10px] font-bold text-gray-500 uppercase">UN ID Number</label>
+                                  <input type="text" value={reporterUnId} onChange={(e) => setReporterUnId(e.target.value)} className="w-full p-2 border rounded font-bold text-sm text-gray-900 border-blue-300" placeholder="M-12345678" />
+                              </div>
+                              <div>
+                                  <label className="text-[10px] font-bold text-gray-500 uppercase mb-1 block">Photo of UN ID</label>
+                                  <label className="cursor-pointer w-full flex items-center justify-center p-2 border-2 border-dashed border-blue-300 rounded hover:bg-blue-100 bg-white transition-colors relative">
+                                      <Camera className="w-4 h-4 mr-2 text-blue-500"/>
+                                      <span className={`text-xs font-bold truncate ${reporterPhotoFile ? 'text-green-600' : 'text-blue-500'}`}>
+                                          {reporterPhotoFile ? "ID Photo Selected" : "Upload / Take Photo"}
+                                      </span>
+                                      <input type="file" accept="image/*" capture="environment" className="hidden" onChange={(e) => setReporterPhotoFile(e.target.files ? e.target.files[0] : null)} />
+                                      
+                                      {/* CLEAR BUTTON */}
+                                      {reporterPhotoFile && (
+                                          <button 
+                                            onClick={(e) => {
+                                                e.preventDefault(); e.stopPropagation();
+                                                setReporterPhotoFile(null);
+                                            }}
+                                            className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1 shadow-sm hover:bg-red-600"
+                                          >
+                                              <X className="w-3 h-3"/>
+                                          </button>
+                                      )}
+                                  </label>
+                              </div>
                           </div>
                       </div>
                   </div>
               </div>
+              <button onClick={handleSubmitLog} disabled={uploading} className="w-full mt-4 bg-orange-600 text-white py-3 rounded-lg font-black text-lg hover:bg-orange-700 shadow-md">{uploading ? 'Uploading & Saving...' : 'Submit Full Report'}</button>
           </div>
-          <button onClick={handleSubmitLog} disabled={uploading} className="w-full mt-4 bg-orange-600 text-white py-3 rounded-lg font-black text-lg hover:bg-orange-700 shadow-md">{uploading ? 'Uploading & Saving...' : 'Submit Full Report'}</button>
-      </div>
+      )}
 
       {/* 4. MAINTENANCE HISTORY */}
       <div className="bg-white rounded-lg shadow-lg overflow-hidden border border-gray-200 mb-8">
@@ -728,7 +730,10 @@ export default function VehicleDetails() {
                             {(!evidence[log.id] || evidence[log.id].length === 0) ? <span className="text-xs italic text-gray-400">No photos.</span> : evidence[log.id].map((pic: any) => (
                                 <img key={pic.id} src={pic.image_url} className="w-16 h-16 object-cover rounded border cursor-pointer hover:scale-110 transition-transform" onClick={()=>setViewImage(pic.image_url)} />
                             ))}
-                            <label className="cursor-pointer w-16 h-16 flex flex-col items-center justify-center border-2 border-dashed border-gray-300 rounded hover:bg-blue-50 text-blue-500"><Plus className="w-4 h-4"/><input type="file" accept="image/*" capture="environment" className="hidden" onChange={(e) => handleLogUpload(e, log.id)} /></label>
+                            {/* EVIDENCE ADD BUTTON (HIDDEN FOR GUESTS) */}
+                            {!isGuest && (
+                                <label className="cursor-pointer w-16 h-16 flex flex-col items-center justify-center border-2 border-dashed border-gray-300 rounded hover:bg-blue-50 text-blue-500"><Plus className="w-4 h-4"/><input type="file" accept="image/*" capture="environment" className="hidden" onChange={(e) => handleLogUpload(e, log.id)} /></label>
+                            )}
                         </div>
                     </div>
                 </div>
@@ -737,7 +742,7 @@ export default function VehicleDetails() {
       </div>
 
       {/* DANGER ZONE */}
-      {userRole === 'super_admin' && (
+      {isSuperAdmin && (
           <div className="mt-12 p-8 bg-red-50 border-2 border-red-200 rounded-xl text-center">
               <h3 className="text-2xl font-black text-red-700 uppercase mb-2">Danger Zone</h3>
               <button onClick={handleDeleteVehicle} className="bg-red-600 hover:bg-red-700 text-white font-black py-4 px-8 rounded-lg shadow-lg uppercase flex items-center justify-center mx-auto"><Trash2 className="w-6 h-6 mr-2" /> DELETE VEHICLE</button>

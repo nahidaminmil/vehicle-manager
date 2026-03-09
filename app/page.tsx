@@ -16,7 +16,7 @@ export default function Dashboard() {
   const [filter, setFilter] = useState('')
   const [role, setRole] = useState('') 
 
-  // --- DYNAMIC STATUS LIST ---
+  // --- DYNAMIC STATUS LIST (From DB) ---
   const [statusList, setStatusList] = useState<string[]>([])
   const [statusFilter, setStatusFilter] = useState('ALL') 
 
@@ -38,14 +38,14 @@ export default function Dashboard() {
     if (profile) {
         setRole(profile.role)
 
-        // --- REDIRECT VEHICLE USERS ---
+        // --- CRITICAL FIX: REDIRECT VEHICLE USERS ---
         if (profile.role === 'vehicle_user' && profile.assigned_vehicle_id) {
             router.replace(`/vehicle/${profile.assigned_vehicle_id}`)
             return // Stop execution here so dashboard doesn't flash
         }
     }
 
-    // 2. Fetch Dynamic Statuses
+    // 2. Fetch Dynamic Statuses (This ensures new DB rows appear as Cards)
     const { data: sData } = await supabase.from('vehicle_statuses').select('name').order('sort_order')
     if (sData) setStatusList(sData.map((s: any) => s.name))
 
@@ -80,11 +80,13 @@ export default function Dashboard() {
     return matchesText && matchesStatus
   })
 
-  // --- SMART ATTRIBUTES GENERATOR (FIXED COLORS) ---
+  // --- SMART ATTRIBUTES GENERATOR (FIXED) ---
+  // This logic automatically styles new statuses based on their name keywords
   const getStatusAttributes = (name: string) => {
       const s = (name || '').toLowerCase()
       
-      // 1. INACTIVE Variants (Red) - Priority Check
+      // 1. INACTIVE Variants (Red) - CHECK THIS FIRST!
+      // This prevents "Inactive" from being caught by the "Active" check below
       if (s.includes('inactive') || s.includes('off road')) return { 
           badge: 'bg-red-100 text-red-800', 
           card: 'bg-red-600', 
@@ -98,8 +100,9 @@ export default function Dashboard() {
           icon: <CheckCircle className="w-6 h-6"/> 
       }
       
-      // 3. ACTIVE Variants (Green) - General Check
-      if (s.includes('active long range')) return { 
+      // 3. ACTIVE Variants (Green)
+      // "Active Long Range" will be caught here because it contains "active"
+      if (s.includes('active')) return { 
           badge: 'bg-green-100 text-green-800', 
           card: 'bg-green-600', 
           icon: <CheckCircle className="w-6 h-6"/> 
@@ -120,11 +123,11 @@ export default function Dashboard() {
       }
   }
 
-  // --- OP CATEGORY COLORS ---
+  // --- OP CATEGORY COLOR HELPER ---
   const getOpCatColor = (c: string) => {
       const cat = (c || '').toLowerCase()
       if (cat.includes('fully') || cat.includes('fmc')) return 'bg-blue-100 text-blue-800'
-      if (cat.includes('degraded')) return 'bg-amber-100 text-amber-900' 
+      if (cat.includes('degraded')) return 'bg-amber-200 text-amber-900' 
       if (cat.includes('non') || cat.includes('nmc')) return 'bg-red-100 text-red-800'
       return 'bg-gray-100 text-gray-800'
   }
@@ -148,9 +151,9 @@ export default function Dashboard() {
           </div>
         </div>
         
-        {/* Navigation Buttons (Restored) */}
+        {/* Navigation Buttons - RESTORED FULL LIST & GUEST ADDED TO WORKSHOP */}
         <div className="flex flex-wrap gap-2 w-full md:w-auto items-center justify-start md:justify-end">
-           {(role === 'super_admin' || role === 'admin' || role === 'tob_admin' || role === 'workshop_admin') && (
+           {(role === 'super_admin' || role === 'admin' || role === 'tob_admin' || role === 'workshop_admin' || role === 'guest') && (
                <Link href="/workshop" className="flex-1 md:flex-none flex items-center justify-center bg-orange-600 hover:bg-orange-700 text-white px-3 py-2 md:px-4 md:py-3 rounded-lg font-bold shadow-sm text-sm transition-colors">
                   <Wrench className="w-4 h-4 md:w-5 md:h-5 mr-2" /> Workshop
                </Link>
@@ -181,7 +184,9 @@ export default function Dashboard() {
       </div>
 
       {/* DYNAMIC STATS CARDS GRID */}
+      {/* Automatically creates a card for EVERY status found in the database */}
       <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-3 md:gap-4 mb-6 md:mb-8">
+        {/* 1. Total Fleet (Static First Card) */}
         <StatCard 
             title="Total Fleet" 
             value={vehicles.length} 
@@ -191,7 +196,7 @@ export default function Dashboard() {
             onClick={() => setStatusFilter('ALL')}
         />
         
-        {/* Render Cards from DB */}
+        {/* 2. Dynamic Cards from DB */}
         {statusList.map(statusName => {
             const count = vehicles.filter(v => v.status === statusName).length
             const styles = getStatusAttributes(statusName)
@@ -248,14 +253,14 @@ export default function Dashboard() {
                   <td className="px-6 py-4 font-bold text-gray-600 whitespace-nowrap">{vehicle.vehicle_type_name || '---'}</td>
                   <td className="px-6 py-4 font-bold text-gray-600 whitespace-nowrap"><span className="flex items-center"><MapPin className="w-3 h-3 mr-1 opacity-50"/> {vehicle.tob || '---'}</span></td>
                   
-                  {/* DYNAMIC STATUS BADGE */}
+                  {/* DYNAMIC STATUS BADGE - Uses smart attributes for automatic coloring */}
                   <td className="px-6 py-4 whitespace-nowrap">
                     <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold uppercase tracking-wide ${getStatusAttributes(vehicle.status).badge}`}>
                         {vehicle.status}
                     </span>
                   </td>
 
-                  {/* DYNAMIC OP CAT BADGE */}
+                  {/* DYNAMIC OP CAT BADGE - Uses smart coloring */}
                   <td className="px-6 py-4 whitespace-nowrap">
                     <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold uppercase tracking-wide ${getOpCatColor(vehicle.operational_category)}`}>
                         {vehicle.operational_category}
@@ -292,7 +297,12 @@ export default function Dashboard() {
          ))}
       </div>
       
-      <Link href="/add-vehicle" className="fixed bottom-6 right-6 bg-blue-600 hover:bg-blue-700 text-white w-14 h-14 rounded-full shadow-2xl transition-transform active:scale-95 flex items-center justify-center z-50"><Plus className="w-8 h-8" /></Link>
+      {/* HIDDEN FOR GUEST ROLE */}
+      {role !== 'guest' && (
+        <Link href="/add-vehicle" className="fixed bottom-6 right-6 bg-blue-600 hover:bg-blue-700 text-white w-14 h-14 rounded-full shadow-2xl transition-transform active:scale-95 flex items-center justify-center z-50">
+            <Plus className="w-8 h-8" />
+        </Link>
+      )}
     </div>
   )
 }
