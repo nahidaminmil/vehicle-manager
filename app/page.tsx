@@ -236,7 +236,7 @@ export default function Dashboard() {
       <div className="hidden md:block bg-white rounded-b-xl shadow-lg border-t-0 border border-gray-200 overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse">
-            <thead className="bg-gray-50 text-gray-500 uppercase text-sm font-extrabold tracking-wider">
+            <thead className="bg-gray-100 text-green-900 uppercase text-sm font-extrabold tracking-wider">
               <tr>
                 <th className="px-6 py-4 border-b border-gray-100">Vehicle ID</th>
                 <th className="px-6 py-4 border-b border-gray-100">Type</th>
@@ -286,9 +286,9 @@ export default function Dashboard() {
                     </div>
                     <div className="flex flex-col items-end gap-1">
                         {/* Status Badge */}
-                        <span className={`px-2 py-1 rounded text-xs font-black uppercase ${getStatusAttributes(vehicle.status).badge}`}>{vehicle.status}</span>
+                        <span className={`px-2 py-1 rounded text-sm font-black uppercase ${getStatusAttributes(vehicle.status).badge}`}>{vehicle.status}</span>
                         {/* Op Cat Badge */}
-                        <span className={`px-2 py-1 rounded text-xs font-black uppercase ${getOpCatColor(vehicle.operational_category)}`}>{vehicle.operational_category}</span>
+                        <span className={`px-2 py-1 rounded text-sm font-black uppercase ${getOpCatColor(vehicle.operational_category)}`}>{vehicle.operational_category}</span>
                     </div>
                 </div>
                 <div className="flex items-center justify-between text-sm font-bold text-gray-600 bg-gray-50 p-2 rounded"><span className="flex items-center"><MapPin className="w-4 h-4 mr-1 text-gray-400"/> {vehicle.tob}</span></div>
