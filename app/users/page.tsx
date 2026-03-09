@@ -25,7 +25,7 @@ export default function UserManagementPage() {
   const [newVehicleId, setNewVehicleId] = useState('')
   const [creating, setCreating] = useState(false)
 
-  // --- SEARCH STATE (New!) ---
+  // --- SEARCH STATE ---
   const [searchTerm, setSearchTerm] = useState('')
 
   // --- LISTS ---
@@ -35,7 +35,8 @@ export default function UserManagementPage() {
     { val: 'admin', label: '👮‍♂️ Admin Officer' },
     { val: 'workshop_admin', label: '🔧 Workshop Admin' },
     { val: 'tob_admin', label: '🏰 TOB Commander' },
-    { val: 'vehicle_user', label: '🚙 Vehicle User' }
+    { val: 'vehicle_user', label: '🚙 Vehicle User' },
+    { val: 'guest', label: '👁️ Guest / Auditor' } // <-- GUEST ROLE ADDED HERE
   ]
 
   // 1. FETCH DATA
@@ -208,7 +209,7 @@ export default function UserManagementPage() {
         {/* LIST SECTION */}
         <div className="lg:col-span-2 space-y-4">
             
-            {/* SEARCH BAR (New!) */}
+            {/* SEARCH BAR */}
             <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-200 flex items-center mb-4">
                 <Search className="w-5 h-5 text-gray-400 mr-3" />
                 <input 
@@ -234,8 +235,9 @@ export default function UserManagementPage() {
                 filteredUsers.map((u) => (
                     <div key={u.id} className={`bg-white p-4 rounded-lg shadow-sm border border-gray-200 flex flex-col md:flex-row justify-between items-center transition-all ${editingId === u.id ? 'ring-2 ring-blue-500 bg-blue-50' : ''}`}>
                         <div className="flex items-center gap-4 mb-4 md:mb-0 w-full">
-                            <div className={`p-3 rounded-full flex-shrink-0 ${u.role === 'super_admin' ? 'bg-purple-100 text-purple-700' : u.role === 'admin' ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-600'}`}>
-                                {u.role === 'super_admin' ? <Shield className="w-6 h-6"/> : u.role === 'vehicle_user' ? <Truck className="w-6 h-6"/> : <User className="w-6 h-6"/>}
+                            {/* DYNAMIC ICON STYLING FOR GUEST */}
+                            <div className={`p-3 rounded-full flex-shrink-0 ${u.role === 'super_admin' ? 'bg-purple-100 text-purple-700' : u.role === 'admin' ? 'bg-blue-100 text-blue-700' : u.role === 'guest' ? 'bg-teal-100 text-teal-700' : 'bg-gray-100 text-gray-600'}`}>
+                                {u.role === 'super_admin' ? <Shield className="w-6 h-6"/> : u.role === 'vehicle_user' ? <Truck className="w-6 h-6"/> : u.role === 'guest' ? <Search className="w-6 h-6"/> : <User className="w-6 h-6"/>}
                             </div>
                             <div className="w-full">
                                 <p className="font-bold text-gray-900 text-lg">{u.email}</p>
