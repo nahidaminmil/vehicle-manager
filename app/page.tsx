@@ -103,7 +103,7 @@ export default function Dashboard() {
       // 3. ACTIVE Variants (Green)
       // "Active Long Range" will be caught here because it contains "active"
       if (s.includes('active')) return { 
-          badge: 'bg-green-100 text-green-800', 
+          badge: 'bg-green-200 text-green-900', 
           card: 'bg-green-600', 
           icon: <CheckCircle className="w-6 h-6"/> 
       }
