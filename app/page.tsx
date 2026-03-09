@@ -286,9 +286,9 @@ export default function Dashboard() {
                     </div>
                     <div className="flex flex-col items-end gap-1">
                         {/* Status Badge */}
-                        <span className={`px-2 py-0.5 rounded text-[10px] font-black uppercase ${getStatusAttributes(vehicle.status).badge}`}>{vehicle.status}</span>
+                        <span className={`px-2 py-1 rounded text-sx font-black uppercase ${getStatusAttributes(vehicle.status).badge}`}>{vehicle.status}</span>
                         {/* Op Cat Badge */}
-                        <span className={`px-2 py-0.5 rounded text-[10px] font-black uppercase ${getOpCatColor(vehicle.operational_category)}`}>{vehicle.operational_category}</span>
+                        <span className={`px-2 py-1 rounded text-sx font-black uppercase ${getOpCatColor(vehicle.operational_category)}`}>{vehicle.operational_category}</span>
                     </div>
                 </div>
                 <div className="flex items-center justify-between text-sm font-bold text-gray-600 bg-gray-50 p-2 rounded"><span className="flex items-center"><MapPin className="w-4 h-4 mr-1 text-gray-400"/> {vehicle.tob}</span></div>
