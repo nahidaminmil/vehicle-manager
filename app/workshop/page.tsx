@@ -12,6 +12,7 @@ export default function WorkshopFloor() {
   const router = useRouter()
   const [loading, setLoading] = useState(true)
   const [logs, setLogs] = useState<any[]>([])
+  const [userRole, setUserRole] = useState('')
 
   // --- FETCH FROM VIEW ---
   useEffect(() => {
@@ -19,7 +20,16 @@ export default function WorkshopFloor() {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) return router.push('/login')
 
-      // Fetch from the secure system view
+      // 1. Fetch Profile for Role & TOB
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('role, assigned_tob')
+        .eq('id', user.id)
+        .single()
+      
+      if (profile) setUserRole(profile.role)
+
+      // 2. Fetch from the secure system view
       const { data, error } = await supabase
         .from('workshop_feed') 
         .select('*')
@@ -28,7 +38,16 @@ export default function WorkshopFloor() {
       if (error) {
           console.error("Error fetching logs:", error.message)
       } else {
-          setLogs(data || [])
+          let fetchedLogs = data || []
+
+          // --- ROLE BASED FILTERING ---
+          // If user is a TOB Admin, strictly filter to show only their assigned TOB
+          if (profile?.role === 'tob_admin' && profile?.assigned_tob) {
+              fetchedLogs = fetchedLogs.filter((log: any) => log.tob === profile.assigned_tob)
+          }
+          // Note: 'guest', 'admin', 'super_admin', and 'workshop_admin' bypass this and see everything.
+
+          setLogs(fetchedLogs)
       }
       setLoading(false)
     }
@@ -60,6 +79,8 @@ export default function WorkshopFloor() {
 
   if (loading) return <div className="p-8 font-black text-xl text-gray-800">Loading Workshop Floor...</div>
 
+  const isGuest = userRole === 'guest'
+
   return (
     <div className="min-h-screen bg-gray-100 p-4 md:p-6 pb-24">
       {/* HEADER */}
@@ -88,7 +109,7 @@ export default function WorkshopFloor() {
           icon={<AlertTriangle className="w-5 h-5 text-red-600"/>}
         >
           {pending.map(log => (
-            <JobCard key={log.id} log={log} onMove={() => updateStatus(log.id, 'In Progress')} moveLabel="Start Job" moveColor="bg-blue-600" />
+            <JobCard key={log.id} log={log} isGuest={isGuest} onMove={() => updateStatus(log.id, 'In Progress')} moveLabel="Start Job" moveColor="bg-blue-600" />
           ))}
           {pending.length === 0 && <div className="text-center text-gray-400 font-bold py-8 opacity-50">No Pending Jobs</div>}
         </Column>
@@ -101,7 +122,7 @@ export default function WorkshopFloor() {
           icon={<Activity className="w-5 h-5 text-blue-600"/>}
         >
           {inProgress.map(log => (
-            <JobCard key={log.id} log={log} onMove={() => updateStatus(log.id, 'Resolved')} moveLabel="Mark Complete" moveColor="bg-green-600" />
+            <JobCard key={log.id} log={log} isGuest={isGuest} onMove={() => updateStatus(log.id, 'Resolved')} moveLabel="Mark Complete" moveColor="bg-green-600" />
           ))}
           {inProgress.length === 0 && <div className="text-center text-blue-300 font-bold py-8 opacity-50">Floor Clear</div>}
         </Column>
@@ -114,7 +135,7 @@ export default function WorkshopFloor() {
           icon={<CheckCircle className="w-5 h-5 text-green-600"/>}
         >
           {resolved.map(log => (
-            <JobCard key={log.id} log={log} isResolved />
+            <JobCard key={log.id} log={log} isGuest={isGuest} isResolved />
           ))}
           {resolved.length === 0 && <div className="text-center text-green-600 font-bold py-8 opacity-50">No History</div>}
         </Column>
@@ -142,7 +163,7 @@ function Column({ title, count, children, color, icon }: any) {
   )
 }
 
-function JobCard({ log, onMove, moveLabel, moveColor, isResolved }: any) {
+function JobCard({ log, onMove, moveLabel, moveColor, isResolved, isGuest }: any) {
   
   // --- CALCULATE DAYS COUNT ---
   const getDaysCount = () => {
@@ -213,8 +234,8 @@ function JobCard({ log, onMove, moveLabel, moveColor, isResolved }: any) {
           })}
        </div>
 
-       {/* 6. ACTION BUTTON */}
-       {!isResolved && (
+       {/* 6. ACTION BUTTON - HIDDEN IF GUEST OR RESOLVED */}
+       {!isResolved && !isGuest && (
          <button onClick={onMove} className={`w-full py-3 md:py-2 rounded text-white text-xs font-black uppercase flex items-center justify-center hover:opacity-90 transition-opacity ${moveColor}`}>
             {moveLabel} <ArrowRight className="w-3 h-3 ml-1" />
          </button>
