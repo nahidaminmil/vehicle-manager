@@ -4,7 +4,7 @@ import { supabase } from '@/lib/supabase'
 import { useRouter } from 'next/navigation'
 import { 
   Car, CheckCircle, XCircle, Wrench, Activity, Plus, Search, 
-  BarChart3, Grid, LogOut, Users, MapPin, Table, Settings 
+  BarChart3, Grid, LogOut, Users, MapPin, Table, Settings, ClipboardList 
 } from 'lucide-react'
 import Link from 'next/link'
 
@@ -162,6 +162,10 @@ export default function Dashboard() {
                 <>
                     <Link href="/users" className="flex-1 md:flex-none flex items-center justify-center bg-purple-900 hover:bg-black text-white px-3 py-2 md:px-4 md:py-3 rounded-lg font-bold shadow-sm text-sm transition-colors">
                         <Users className="w-4 h-4 md:w-5 md:h-5 mr-2" /> Users
+                    </Link>
+                    {/* NEW ACTIVITY LOG BUTTON */}
+                    <Link href="/activity-log" className="flex-1 md:flex-none flex items-center justify-center bg-indigo-700 hover:bg-indigo-800 text-white px-3 py-2 md:px-4 md:py-3 rounded-lg font-bold shadow-sm text-sm transition-colors">
+                        <ClipboardList className="w-4 h-4 md:w-5 md:h-5 mr-2" /> Activity
                     </Link>
                     <Link href="/admin/settings" className="flex-1 md:flex-none flex items-center justify-center bg-gray-900 hover:bg-black text-white px-3 py-2 md:px-4 md:py-3 rounded-lg font-bold shadow-sm text-sm transition-colors">
                         <Settings className="w-4 h-4 md:w-5 md:h-5 mr-2" /> Config
