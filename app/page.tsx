@@ -4,7 +4,7 @@ import { supabase } from '@/lib/supabase'
 import { useRouter } from 'next/navigation'
 import { 
   Car, CheckCircle, XCircle, Wrench, Activity, Plus, Search, 
-  BarChart3, Grid, LogOut, Users, MapPin, Table, Settings, ClipboardList 
+  BarChart3, Grid, LogOut, Users, MapPin, Table, Settings, ClipboardList, Bell 
 } from 'lucide-react'
 import Link from 'next/link'
 
@@ -19,6 +19,11 @@ export default function Dashboard() {
   // --- DYNAMIC STATUS LIST (From DB) ---
   const [statusList, setStatusList] = useState<string[]>([])
   const [statusFilter, setStatusFilter] = useState('ALL') 
+
+  // --- NOTIFICATIONS STATE ---
+  const [notifications, setNotifications] = useState<any[]>([])
+  const [showNotifications, setShowNotifications] = useState(false)
+  const unreadCount = notifications.filter(n => !n.is_read).length
 
   useEffect(() => {
     checkUserAndFetch()
@@ -45,6 +50,15 @@ export default function Dashboard() {
         }
     }
 
+    // --- FETCH NOTIFICATIONS ---
+    const { data: notifData } = await supabase
+        .from('notifications')
+        .select('*')
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: false })
+        .limit(20)
+    if (notifData) setNotifications(notifData)
+
     // 2. Fetch Dynamic Statuses (This ensures new DB rows appear as Cards)
     const { data: sData } = await supabase.from('vehicle_statuses').select('name').order('sort_order')
     if (sData) setStatusList(sData.map((s: any) => s.name))
@@ -59,6 +73,18 @@ export default function Dashboard() {
     else setVehicles(data || [])
     
     setLoading(false)
+  }
+
+  // --- MARK NOTIFICATIONS AS READ ---
+  async function markAllAsRead() {
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return
+    
+    // Update Database
+    await supabase.from('notifications').update({ is_read: true }).eq('user_id', user.id).eq('is_read', false)
+    
+    // Update Local UI instantly
+    setNotifications(prev => prev.map(n => ({ ...n, is_read: true })))
   }
 
   async function handleLogout() {
@@ -153,6 +179,51 @@ export default function Dashboard() {
         
         {/* Navigation Buttons - RESTORED FULL LIST & GUEST ADDED TO WORKSHOP */}
         <div className="flex flex-wrap gap-2 w-full md:w-auto items-center justify-start md:justify-end">
+           
+           {/* BELL ICON & NOTIFICATION DROPDOWN */}
+           <div className="relative z-50">
+               <button 
+                   onClick={() => setShowNotifications(!showNotifications)}
+                   className="flex items-center justify-center p-2 md:p-3 bg-white hover:bg-gray-50 text-gray-700 rounded-lg font-bold shadow-sm border border-gray-200 transition-colors"
+               >
+                   <Bell className="w-5 h-5 md:w-5 md:h-5" />
+                   {unreadCount > 0 && (
+                       <span className="absolute -top-1.5 -right-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-red-600 text-[10px] font-black text-white shadow-sm ring-2 ring-white">
+                           {unreadCount}
+                       </span>
+                   )}
+               </button>
+
+               {showNotifications && (
+                   <div className="absolute right-0 mt-2 w-80 bg-white rounded-xl shadow-2xl border border-gray-200 overflow-hidden transform opacity-100 scale-100 transition-all origin-top-right">
+                       <div className="bg-gray-50 border-b border-gray-100 p-3 flex justify-between items-center">
+                           <span className="font-black text-gray-800 text-sm uppercase">Notifications</span>
+                           {unreadCount > 0 && (
+                               <button onClick={markAllAsRead} className="text-[10px] font-black text-blue-600 uppercase hover:text-blue-800 tracking-wider">
+                                   Mark all as read
+                               </button>
+                           )}
+                       </div>
+                       <div className="max-h-80 overflow-y-auto divide-y divide-gray-100">
+                           {notifications.length === 0 ? (
+                               <div className="p-6 text-center text-sm font-bold text-gray-400">No new notifications</div>
+                           ) : (
+                               notifications.map(n => (
+                                   <div key={n.id} className={`p-4 hover:bg-gray-50 transition-colors ${!n.is_read ? 'bg-blue-50/40' : 'bg-white'}`}>
+                                       <div className="flex items-start justify-between">
+                                           <p className={`text-xs font-black uppercase mb-1 ${!n.is_read ? 'text-indigo-700' : 'text-gray-500'}`}>{n.title}</p>
+                                           {!n.is_read && <span className="h-2 w-2 rounded-full bg-indigo-600 mt-0.5 flex-shrink-0"></span>}
+                                       </div>
+                                       <p className="text-sm font-bold text-gray-800 leading-snug">{n.message}</p>
+                                       <p className="text-[9px] font-bold text-gray-400 uppercase mt-2">{new Date(n.created_at).toLocaleString()}</p>
+                                   </div>
+                               ))
+                           )}
+                       </div>
+                   </div>
+               )}
+           </div>
+
            {(role === 'super_admin' || role === 'admin' || role === 'tob_admin' || role === 'workshop_admin' || role === 'guest') && (
                <Link href="/workshop" className="flex-1 md:flex-none flex items-center justify-center bg-orange-600 hover:bg-orange-700 text-white px-3 py-2 md:px-4 md:py-3 rounded-lg font-bold shadow-sm text-sm transition-colors">
                   <Wrench className="w-4 h-4 md:w-5 md:h-5 mr-2" /> Workshop
