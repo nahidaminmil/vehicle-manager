@@ -33,31 +33,50 @@ export default function Dashboard() {
   const [selectedChatUser, setSelectedChatUser] = useState<any>(null)
   const [chatMessages, setChatMessages] = useState<any[]>([])
   const [chatInput, setChatInput] = useState('')
+  const [allUnreadMessages, setAllUnreadMessages] = useState<any[]>([]) // NEW: Holds all unread messages
+
+  // --- FETCH HELPERS FOR CHAT (NEW) ---
+  const fetchUnreadMessages = async (uid: string) => {
+      const { data } = await supabase.from('admin_messages').select('*').eq('receiver_id', uid).eq('is_read', false);
+      if (data) setAllUnreadMessages(data);
+  }
+
+  const fetchActiveChatMessages = async (uid: string, contactId: string) => {
+      const { data } = await supabase
+          .from('admin_messages')
+          .select('*')
+          .or(`and(sender_id.eq.${uid},receiver_id.eq.${contactId}),and(sender_id.eq.${contactId},receiver_id.eq.${uid})`)
+          .order('created_at', { ascending: true });
+      if (data) setChatMessages(data);
+      
+      // Instantly mark as read in DB and remove from local unread state
+      await supabase.from('admin_messages').update({ is_read: true }).eq('receiver_id', uid).eq('sender_id', contactId).eq('is_read', false);
+      setAllUnreadMessages(prev => prev.filter(m => m.sender_id !== contactId));
+  }
 
   useEffect(() => {
     checkUserAndFetch()
   }, [])
 
-  // --- REALTIME CHAT LISTENER (NEW) ---
+  // --- REALTIME CHAT LISTENER (UPDATED FOR BADGES) ---
   useEffect(() => {
-      if (!selectedChatUser || !currentUserId) return;
+      if (!currentUserId) return;
+
+      // Fetch initial unread messages
+      fetchUnreadMessages(currentUserId);
+
+      // If a specific chat is selected, load it
+      if (selectedChatUser) {
+          fetchActiveChatMessages(currentUserId, selectedChatUser.id);
+      }
       
-      const fetchMessages = async () => {
-          const { data } = await supabase
-              .from('admin_messages')
-              .select('*')
-              .or(`and(sender_id.eq.${currentUserId},receiver_id.eq.${selectedChatUser.id}),and(sender_id.eq.${selectedChatUser.id},receiver_id.eq.${currentUserId})`)
-              .order('created_at', { ascending: true });
-          if (data) setChatMessages(data);
-          
-          await supabase.from('admin_messages').update({ is_read: true }).eq('receiver_id', currentUserId).eq('sender_id', selectedChatUser.id).eq('is_read', false);
-      };
-      
-      fetchMessages();
-      
+      // Listen globally for any new incoming messages
       const channel = supabase.channel('chat_updates')
           .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'admin_messages' }, () => {
-              fetchMessages(); 
+              fetchUnreadMessages(currentUserId); 
+              if (selectedChatUser) {
+                  fetchActiveChatMessages(currentUserId, selectedChatUser.id);
+              }
           }).subscribe();
           
       return () => { supabase.removeChannel(channel) };
@@ -228,7 +247,7 @@ export default function Dashboard() {
   if (loading) return <div className="min-h-screen flex items-center justify-center bg-gray-100"><div className="text-xl font-black text-gray-900">Loading Command Dashboard...</div></div>
 
   return (
-    <div className="min-h-screen bg-gray-100 p-4 md:p-8 pb-24 relative overflow-hidden">
+    <div className="min-h-screen bg-gray-100 p-4 md:p-8 pb-24">
       
       {/* Top Bar */}
       <div className="flex flex-col md:flex-row justify-between items-center mb-6 gap-4">
@@ -249,16 +268,23 @@ export default function Dashboard() {
            
            {/* SECURE CHAT TOGGLE BUTTON (NEW) */}
            {['super_admin', 'admin', 'tob_admin', 'workshop_admin'].includes(role) && (
-               <button 
-                   onClick={() => setIsChatOpen(true)}
-                   className="flex items-center justify-center p-2 md:p-3 bg-white hover:bg-gray-50 text-gray-700 rounded-lg font-bold shadow-sm border border-gray-200 transition-colors"
-               >
-                   <MessageSquare className="w-5 h-5 md:w-5 md:h-5" />
-               </button>
+               <div className="relative z-40">
+                   <button 
+                       onClick={() => setIsChatOpen(true)}
+                       className="flex items-center justify-center p-2 md:p-3 bg-white hover:bg-gray-50 text-gray-700 rounded-lg font-bold shadow-sm border border-gray-200 transition-colors"
+                   >
+                       <MessageSquare className="w-5 h-5 md:w-5 md:h-5" />
+                       {allUnreadMessages.length > 0 && (
+                           <span className="absolute -top-1.5 -right-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-red-600 text-[10px] font-black text-white shadow-sm ring-2 ring-white">
+                               {allUnreadMessages.length}
+                           </span>
+                       )}
+                   </button>
+               </div>
            )}
 
            {/* BELL ICON & NOTIFICATION DROPDOWN */}
-           <div className="relative z-40">
+           <div className="relative z-50">
                <button 
                    onClick={() => setShowNotifications(!showNotifications)}
                    className="flex items-center justify-center p-2 md:p-3 bg-white hover:bg-gray-50 text-gray-700 rounded-lg font-bold shadow-sm border border-gray-200 transition-colors"
@@ -474,15 +500,30 @@ export default function Dashboard() {
               <div className="flex-1 overflow-y-auto bg-gray-50 p-4">
                   <p className="text-xs font-black text-gray-500 uppercase tracking-wider mb-3">Admin Directory</p>
                   <div className="space-y-2">
-                      {adminUsers.map(admin => (
-                          <button key={admin.id} onClick={() => setSelectedChatUser(admin)} className="w-full bg-white p-3 rounded-xl shadow-sm border border-gray-200 hover:border-blue-500 text-left transition-all group">
-                              <p className="font-black text-gray-900 group-hover:text-blue-700 truncate">{admin.email}</p>
-                              <div className="flex gap-2 mt-1">
-                                  <span className="text-[9px] font-black uppercase tracking-widest bg-gray-100 text-gray-500 px-2 py-0.5 rounded">{admin.role.replace('_', ' ')}</span>
-                                  {admin.assigned_tob && <span className="text-[9px] font-black uppercase tracking-widest bg-blue-100 text-blue-700 px-2 py-0.5 rounded">{admin.assigned_tob}</span>}
-                              </div>
-                          </button>
-                      ))}
+                      {adminUsers.map(admin => {
+                          // Extract the specific unread count for this individual admin card
+                          const userUnreadCount = allUnreadMessages.filter(m => m.sender_id === admin.id).length;
+                          
+                          return (
+                              <button key={admin.id} onClick={() => setSelectedChatUser(admin)} className="w-full bg-white p-3 rounded-xl shadow-sm border border-gray-200 hover:border-blue-500 text-left transition-all group">
+                                  <div className="flex justify-between items-start">
+                                      <div className="flex-1 truncate pr-2">
+                                          <p className="font-black text-gray-900 group-hover:text-blue-700 truncate">{admin.email}</p>
+                                          <div className="flex gap-2 mt-1">
+                                              <span className="text-[9px] font-black uppercase tracking-widest bg-gray-100 text-gray-500 px-2 py-0.5 rounded">{admin.role.replace('_', ' ')}</span>
+                                              {admin.assigned_tob && <span className="text-[9px] font-black uppercase tracking-widest bg-blue-100 text-blue-700 px-2 py-0.5 rounded">{admin.assigned_tob}</span>}
+                                          </div>
+                                      </div>
+                                      {/* Per-User Badge */}
+                                      {userUnreadCount > 0 && (
+                                          <span className="flex h-5 w-5 items-center justify-center rounded-full bg-red-600 text-[10px] font-black text-white shadow-sm flex-shrink-0 mt-1">
+                                              {userUnreadCount}
+                                          </span>
+                                      )}
+                                  </div>
+                              </button>
+                          );
+                      })}
                   </div>
               </div>
           ) : (
