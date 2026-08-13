@@ -16,6 +16,8 @@ export default function Dashboard() {
   const [errorMsg, setErrorMsg] = useState('') 
   const [filter, setFilter] = useState('')
   const [role, setRole] = useState('') 
+  const [myProfileName, setMyProfileName] = useState('') // NEW: Holds the logged in user's profile name
+  const [myEmail, setMyEmail] = useState('') // NEW: Holds the logged in user's email
 
   // --- DYNAMIC STATUS LIST (From DB) ---
   const [statusList, setStatusList] = useState<string[]>([])
@@ -34,6 +36,7 @@ export default function Dashboard() {
   const [chatMessages, setChatMessages] = useState<any[]>([])
   const [chatInput, setChatInput] = useState('')
   const [allUnreadMessages, setAllUnreadMessages] = useState<any[]>([]) // NEW: Holds all unread messages
+  const [chatSearch, setChatSearch] = useState('') // NEW: Search state for chat directory
 
   // --- FETCH HELPERS FOR CHAT (NEW) ---
   const fetchUnreadMessages = async (uid: string) => {
@@ -85,23 +88,25 @@ export default function Dashboard() {
   async function checkUserAndFetch() {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return router.push('/login')
+    setMyEmail(user.email || '') // Set fallback email
 
-    // 1. Fetch Profile & Check for Redirect
+    // 1. Fetch Profile & Check for Redirect (UPDATED to fetch profile_name)
     const { data: profile } = await supabase
         .from('profiles')
-        .select('role, assigned_vehicle_id, email, assigned_tob') 
+        .select('role, assigned_vehicle_id, email, assigned_tob, profile_name') 
         .eq('id', user.id)
         .single()
     
     if (profile) {
         setRole(profile.role)
         setCurrentUserId(user.id)
+        setMyProfileName(profile.profile_name || '') // Store profile name
 
-        // --- FETCH SECURE ADMIN DIRECTORY (NEW) ---
+        // --- FETCH SECURE ADMIN DIRECTORY (UPDATED to fetch profile_name) ---
         if (['super_admin', 'admin', 'tob_admin', 'workshop_admin'].includes(profile.role)) {
             const { data: admins } = await supabase
                 .from('profiles')
-                .select('id, email, role, assigned_tob')
+                .select('id, email, role, assigned_tob, profile_name')
                 .in('role', ['super_admin', 'admin', 'tob_admin', 'workshop_admin'])
                 .neq('id', user.id);
             if (admins) setAdminUsers(admins);
@@ -206,6 +211,20 @@ export default function Dashboard() {
     return matchesText && matchesStatus
   })
 
+  // --- CHAT DIRECTORY FILTERING & SORTING (NEW) ---
+  const sortedAndFilteredAdmins = adminUsers
+    .filter(admin => {
+        const searchStr = chatSearch.toLowerCase();
+        return (admin.profile_name || '').toLowerCase().includes(searchStr) || 
+               (admin.email || '').toLowerCase().includes(searchStr);
+    })
+    .sort((a, b) => {
+        // Pushes users with unread messages to the top
+        const aUnread = allUnreadMessages.filter(m => m.sender_id === a.id).length > 0 ? 1 : 0;
+        const bUnread = allUnreadMessages.filter(m => m.sender_id === b.id).length > 0 ? 1 : 0;
+        return bUnread - aUnread; 
+    });
+
   // --- SMART ATTRIBUTES GENERATOR (FIXED) ---
   // This logic automatically styles new statuses based on their name keywords
   const getStatusAttributes = (name: string) => {
@@ -269,10 +288,16 @@ export default function Dashboard() {
           <h1 className="text-2xl md:text-3xl font-black text-gray-900 tracking-tight">COMMAND DASHBOARD</h1>
           <div className="flex items-center gap-2 mt-1">
             <p className="text-gray-600 font-bold text-xs md:text-sm">Military Vehicle Accountability System</p>
+            {/* UPDATED HEADER: Now shows Profile Name dynamically */}
             {role && (
-                <span className={`px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-wider ${role === 'super_admin' ? 'bg-purple-100 text-purple-700' : 'bg-gray-200 text-gray-600'}`}>
-                    {role.replace('_', ' ')}
-                </span>
+                <div className="flex items-center gap-2">
+                    <span className={`px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-wider ${role === 'super_admin' ? 'bg-purple-100 text-purple-700' : 'bg-gray-200 text-gray-600'}`}>
+                        {role.replace('_', ' ')}
+                    </span>
+                    <span className="text-[10px] md:text-xs font-black text-gray-800 uppercase tracking-widest hidden sm:inline-block">
+                        {myProfileName || myEmail}
+                    </span>
+                </div>
             )}
           </div>
         </div>
@@ -513,24 +538,40 @@ export default function Dashboard() {
 
           {/* User Directory / Chat Area */}
           {!selectedChatUser ? (
-              <div className="flex-1 overflow-y-auto bg-gray-50 p-4">
-                  <p className="text-xs font-black text-gray-500 uppercase tracking-wider mb-3">Admin Directory</p>
-                  <div className="space-y-2">
-                      {adminUsers.map(admin => {
-                          // Extract the specific unread count for this individual admin card
+              <div className="flex-1 overflow-y-auto bg-gray-50 flex flex-col">
+                  {/* NEW: Chat Search Bar */}
+                  <div className="p-4 bg-white border-b border-gray-200 sticky top-0 z-10 shadow-sm">
+                      <div className="relative">
+                          <Search className="absolute left-3 top-2.5 w-4 h-4 text-gray-400" />
+                          <input 
+                              type="text" 
+                              placeholder="Search by name or email..." 
+                              value={chatSearch}
+                              onChange={(e) => setChatSearch(e.target.value)}
+                              className="w-full pl-9 pr-3 py-2 bg-gray-100 rounded-lg text-sm font-bold text-gray-800 outline-none focus:ring-2 focus:ring-blue-500"
+                          />
+                      </div>
+                  </div>
+
+                  <div className="p-4 space-y-2">
+                      {sortedAndFilteredAdmins.map(admin => {
                           const userUnreadCount = allUnreadMessages.filter(m => m.sender_id === admin.id).length;
                           
                           return (
                               <button key={admin.id} onClick={() => setSelectedChatUser(admin)} className="w-full bg-white p-3 rounded-xl shadow-sm border border-gray-200 hover:border-blue-500 text-left transition-all group">
                                   <div className="flex justify-between items-start">
                                       <div className="flex-1 truncate pr-2">
-                                          <p className="font-black text-gray-900 group-hover:text-blue-700 truncate">{admin.email}</p>
+                                          {/* UPDATED: Shows Profile Name primarily, email secondary */}
+                                          <p className="font-black text-gray-900 group-hover:text-blue-700 truncate text-base">
+                                              {admin.profile_name || 'UNNAMED ADMIN'}
+                                          </p>
+                                          <p className="text-[10px] font-bold text-gray-500 truncate mb-1">{admin.email}</p>
+
                                           <div className="flex gap-2 mt-1">
                                               <span className="text-[9px] font-black uppercase tracking-widest bg-gray-100 text-gray-500 px-2 py-0.5 rounded">{admin.role.replace('_', ' ')}</span>
                                               {admin.assigned_tob && <span className="text-[9px] font-black uppercase tracking-widest bg-blue-100 text-blue-700 px-2 py-0.5 rounded">{admin.assigned_tob}</span>}
                                           </div>
                                       </div>
-                                      {/* Per-User Badge */}
                                       {userUnreadCount > 0 && (
                                           <span className="flex h-5 w-5 items-center justify-center rounded-full bg-red-600 text-[10px] font-black text-white shadow-sm flex-shrink-0 mt-1">
                                               {userUnreadCount}
@@ -548,8 +589,9 @@ export default function Dashboard() {
                   <div className="bg-white border-b border-gray-200 p-3 flex items-center shadow-sm z-10">
                       <button onClick={() => setSelectedChatUser(null)} className="mr-3 text-xs font-black text-gray-400 hover:text-black uppercase tracking-wider">← Back</button>
                       <div className="truncate">
-                          <p className="text-xs font-black text-gray-900 truncate">{selectedChatUser.email}</p>
-                          <p className="text-[9px] font-bold text-gray-500 uppercase">{selectedChatUser.role.replace('_', ' ')}</p>
+                          {/* UPDATED: Active chat header shows Profile Name */}
+                          <p className="text-sm font-black text-gray-900 truncate">{selectedChatUser.profile_name || 'UNNAMED ADMIN'}</p>
+                          <p className="text-[9px] font-bold text-gray-500 uppercase">{selectedChatUser.role.replace('_', ' ')} • {selectedChatUser.email}</p>
                       </div>
                   </div>
 
