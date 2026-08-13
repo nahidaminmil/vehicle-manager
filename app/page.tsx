@@ -162,6 +162,17 @@ export default function Dashboard() {
     setNotifications(prev => prev.map(n => ({ ...n, is_read: true })))
   }
 
+  // --- MARK SINGLE NOTIFICATION AS READ ---
+  async function markAsRead(notificationId: string, isRead: boolean) {
+    if (isRead) return; // Do nothing if it's already read
+    
+    // Update Database
+    await supabase.from('notifications').update({ is_read: true }).eq('id', notificationId)
+    
+    // Update Local UI instantly
+    setNotifications(prev => prev.map(n => n.id === notificationId ? { ...n, is_read: true } : n))
+  }
+
   // --- UPDATED LOGOUT FUNCTION ---
   async function handleLogout() {
     // 1. Grab the user's information before they sign out
@@ -316,7 +327,8 @@ export default function Dashboard() {
                                <div className="p-6 text-center text-sm font-bold text-gray-400">No new notifications</div>
                            ) : (
                                notifications.map(n => (
-                                   <div key={n.id} className={`p-4 hover:bg-gray-50 transition-colors ${!n.is_read ? 'bg-blue-50/40' : 'bg-white'}`}>
+                                   // Added onClick and cursor-pointer to the notification card
+                                   <div key={n.id} onClick={() => markAsRead(n.id, n.is_read)} className={`p-4 hover:bg-gray-50 transition-colors cursor-pointer ${!n.is_read ? 'bg-blue-50/40' : 'bg-white'}`}>
                                        <div className="flex items-start justify-between">
                                            <p className={`text-xs font-black uppercase mb-1 ${!n.is_read ? 'text-indigo-700' : 'text-gray-500'}`}>{n.title}</p>
                                            {!n.is_read && <span className="h-2 w-2 rounded-full bg-indigo-600 mt-0.5 flex-shrink-0"></span>}
