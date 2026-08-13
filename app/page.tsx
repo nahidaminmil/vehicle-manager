@@ -4,7 +4,8 @@ import { supabase } from '@/lib/supabase'
 import { useRouter } from 'next/navigation'
 import { 
   Car, CheckCircle, XCircle, Wrench, Activity, Plus, Search, 
-  BarChart3, Grid, LogOut, Users, MapPin, Table, Settings, ClipboardList, Bell 
+  BarChart3, Grid, LogOut, Users, MapPin, Table, Settings, ClipboardList, Bell,
+  MessageSquare, X, Send 
 } from 'lucide-react'
 import Link from 'next/link'
 
@@ -25,9 +26,42 @@ export default function Dashboard() {
   const [showNotifications, setShowNotifications] = useState(false)
   const unreadCount = notifications.filter(n => !n.is_read).length
 
+  // --- SECURE COMMAND CHAT STATE (NEW) ---
+  const [currentUserId, setCurrentUserId] = useState<string>('')
+  const [isChatOpen, setIsChatOpen] = useState(false)
+  const [adminUsers, setAdminUsers] = useState<any[]>([])
+  const [selectedChatUser, setSelectedChatUser] = useState<any>(null)
+  const [chatMessages, setChatMessages] = useState<any[]>([])
+  const [chatInput, setChatInput] = useState('')
+
   useEffect(() => {
     checkUserAndFetch()
   }, [])
+
+  // --- REALTIME CHAT LISTENER (NEW) ---
+  useEffect(() => {
+      if (!selectedChatUser || !currentUserId) return;
+      
+      const fetchMessages = async () => {
+          const { data } = await supabase
+              .from('admin_messages')
+              .select('*')
+              .or(`and(sender_id.eq.${currentUserId},receiver_id.eq.${selectedChatUser.id}),and(sender_id.eq.${selectedChatUser.id},receiver_id.eq.${currentUserId})`)
+              .order('created_at', { ascending: true });
+          if (data) setChatMessages(data);
+          
+          await supabase.from('admin_messages').update({ is_read: true }).eq('receiver_id', currentUserId).eq('sender_id', selectedChatUser.id).eq('is_read', false);
+      };
+      
+      fetchMessages();
+      
+      const channel = supabase.channel('chat_updates')
+          .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'admin_messages' }, () => {
+              fetchMessages(); 
+          }).subscribe();
+          
+      return () => { supabase.removeChannel(channel) };
+  }, [selectedChatUser, currentUserId]);
 
   async function checkUserAndFetch() {
     const { data: { user } } = await supabase.auth.getUser()
@@ -36,12 +70,23 @@ export default function Dashboard() {
     // 1. Fetch Profile & Check for Redirect
     const { data: profile } = await supabase
         .from('profiles')
-        .select('role, assigned_vehicle_id') 
+        .select('role, assigned_vehicle_id, email, assigned_tob') 
         .eq('id', user.id)
         .single()
     
     if (profile) {
         setRole(profile.role)
+        setCurrentUserId(user.id)
+
+        // --- FETCH SECURE ADMIN DIRECTORY (NEW) ---
+        if (['super_admin', 'admin', 'tob_admin', 'workshop_admin'].includes(profile.role)) {
+            const { data: admins } = await supabase
+                .from('profiles')
+                .select('id, email, role, assigned_tob')
+                .in('role', ['super_admin', 'admin', 'tob_admin', 'workshop_admin'])
+                .neq('id', user.id);
+            if (admins) setAdminUsers(admins);
+        }
 
         // --- CRITICAL FIX: REDIRECT VEHICLE USERS ---
         if (profile.role === 'vehicle_user' && profile.assigned_vehicle_id) {
@@ -73,6 +118,14 @@ export default function Dashboard() {
     else setVehicles(data || [])
     
     setLoading(false)
+  }
+
+  // --- SEND CHAT MESSAGE (NEW) ---
+  async function sendMessage() {
+      if (!chatInput.trim() || !selectedChatUser) return;
+      const msg = chatInput.trim();
+      setChatInput(''); 
+      await supabase.from('admin_messages').insert([{ sender_id: currentUserId, receiver_id: selectedChatUser.id, message: msg }]);
   }
 
   // --- MARK NOTIFICATIONS AS READ ---
@@ -175,7 +228,7 @@ export default function Dashboard() {
   if (loading) return <div className="min-h-screen flex items-center justify-center bg-gray-100"><div className="text-xl font-black text-gray-900">Loading Command Dashboard...</div></div>
 
   return (
-    <div className="min-h-screen bg-gray-100 p-4 md:p-8 pb-24">
+    <div className="min-h-screen bg-gray-100 p-4 md:p-8 pb-24 relative overflow-hidden">
       
       {/* Top Bar */}
       <div className="flex flex-col md:flex-row justify-between items-center mb-6 gap-4">
@@ -194,8 +247,18 @@ export default function Dashboard() {
         {/* Navigation Buttons - RESTORED FULL LIST & GUEST ADDED TO WORKSHOP */}
         <div className="flex flex-wrap gap-2 w-full md:w-auto items-center justify-start md:justify-end">
            
+           {/* SECURE CHAT TOGGLE BUTTON (NEW) */}
+           {['super_admin', 'admin', 'tob_admin', 'workshop_admin'].includes(role) && (
+               <button 
+                   onClick={() => setIsChatOpen(true)}
+                   className="flex items-center justify-center p-2 md:p-3 bg-white hover:bg-gray-50 text-gray-700 rounded-lg font-bold shadow-sm border border-gray-200 transition-colors"
+               >
+                   <MessageSquare className="w-5 h-5 md:w-5 md:h-5" />
+               </button>
+           )}
+
            {/* BELL ICON & NOTIFICATION DROPDOWN */}
-           <div className="relative z-50">
+           <div className="relative z-40">
                <button 
                    onClick={() => setShowNotifications(!showNotifications)}
                    className="flex items-center justify-center p-2 md:p-3 bg-white hover:bg-gray-50 text-gray-700 rounded-lg font-bold shadow-sm border border-gray-200 transition-colors"
@@ -392,6 +455,80 @@ export default function Dashboard() {
             <Plus className="w-8 h-8" />
         </Link>
       )}
+
+      {/* --- SECURE SLIDING CHAT WINDOW (NEW) --- */}
+      {/* Uses z-[100] to hover entirely over the existing layout without shifting it */}
+      <div className={`fixed top-0 right-0 h-full w-full md:w-[400px] bg-white shadow-2xl border-l border-gray-200 transform transition-transform duration-300 z-[100] flex flex-col ${isChatOpen ? 'translate-x-0' : 'translate-x-full'}`}>
+          
+          {/* Chat Header */}
+          <div className="bg-gray-900 p-4 flex justify-between items-center text-white">
+              <div>
+                  <h2 className="font-black tracking-widest uppercase">Secure Comms</h2>
+                  <p className="text-[10px] text-gray-400 font-bold uppercase">End-to-End Encrypted</p>
+              </div>
+              <button onClick={() => setIsChatOpen(false)} className="p-2 hover:bg-white/10 rounded-full transition-colors"><X className="w-5 h-5"/></button>
+          </div>
+
+          {/* User Directory / Chat Area */}
+          {!selectedChatUser ? (
+              <div className="flex-1 overflow-y-auto bg-gray-50 p-4">
+                  <p className="text-xs font-black text-gray-500 uppercase tracking-wider mb-3">Admin Directory</p>
+                  <div className="space-y-2">
+                      {adminUsers.map(admin => (
+                          <button key={admin.id} onClick={() => setSelectedChatUser(admin)} className="w-full bg-white p-3 rounded-xl shadow-sm border border-gray-200 hover:border-blue-500 text-left transition-all group">
+                              <p className="font-black text-gray-900 group-hover:text-blue-700 truncate">{admin.email}</p>
+                              <div className="flex gap-2 mt-1">
+                                  <span className="text-[9px] font-black uppercase tracking-widest bg-gray-100 text-gray-500 px-2 py-0.5 rounded">{admin.role.replace('_', ' ')}</span>
+                                  {admin.assigned_tob && <span className="text-[9px] font-black uppercase tracking-widest bg-blue-100 text-blue-700 px-2 py-0.5 rounded">{admin.assigned_tob}</span>}
+                              </div>
+                          </button>
+                      ))}
+                  </div>
+              </div>
+          ) : (
+              <div className="flex-1 flex flex-col bg-gray-50">
+                  {/* Active Chat Header */}
+                  <div className="bg-white border-b border-gray-200 p-3 flex items-center shadow-sm z-10">
+                      <button onClick={() => setSelectedChatUser(null)} className="mr-3 text-xs font-black text-gray-400 hover:text-black uppercase tracking-wider">← Back</button>
+                      <div className="truncate">
+                          <p className="text-xs font-black text-gray-900 truncate">{selectedChatUser.email}</p>
+                          <p className="text-[9px] font-bold text-gray-500 uppercase">{selectedChatUser.role.replace('_', ' ')}</p>
+                      </div>
+                  </div>
+
+                  {/* Message History */}
+                  <div className="flex-1 overflow-y-auto p-4 space-y-4 flex flex-col">
+                      {chatMessages.map(msg => {
+                          const isMe = msg.sender_id === currentUserId;
+                          return (
+                              <div key={msg.id} className={`max-w-[85%] rounded-2xl p-3 shadow-sm text-sm font-bold ${isMe ? 'bg-blue-600 text-white self-end rounded-br-sm' : 'bg-white border border-gray-200 text-gray-800 self-start rounded-bl-sm'}`}>
+                                  {msg.message}
+                                  <p className={`text-[9px] mt-1 text-right ${isMe ? 'text-blue-200' : 'text-gray-400'}`}>{new Date(msg.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</p>
+                              </div>
+                          )
+                      })}
+                  </div>
+
+                  {/* Input Box */}
+                  <div className="bg-white border-t border-gray-200 p-3">
+                      <div className="flex items-center bg-gray-100 rounded-xl border border-gray-200 overflow-hidden focus-within:ring-2 focus-within:ring-blue-500 transition-all">
+                          <input 
+                              type="text" 
+                              value={chatInput} 
+                              onChange={(e) => setChatInput(e.target.value)} 
+                              onKeyDown={(e) => e.key === 'Enter' && sendMessage()}
+                              placeholder="Type highly secure message..." 
+                              className="flex-1 bg-transparent p-3 text-sm font-bold text-gray-900 outline-none placeholder-gray-400"
+                          />
+                          <button onClick={sendMessage} disabled={!chatInput.trim()} className="p-3 text-blue-600 hover:text-blue-800 disabled:text-gray-300 disabled:bg-transparent transition-colors">
+                              <Send className="w-5 h-5"/>
+                          </button>
+                      </div>
+                  </div>
+              </div>
+          )}
+      </div>
+
     </div>
   )
 }
