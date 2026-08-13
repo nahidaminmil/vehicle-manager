@@ -87,7 +87,21 @@ export default function Dashboard() {
     setNotifications(prev => prev.map(n => ({ ...n, is_read: true })))
   }
 
+  // --- UPDATED LOGOUT FUNCTION ---
   async function handleLogout() {
+    // 1. Grab the user's information before they sign out
+    const { data: { user } } = await supabase.auth.getUser()
+    
+    // 2. Write the logout event directly to the activity log
+    if (user && user.email) {
+        await supabase.from('activity_logs').insert([{
+            user_email: user.email,
+            action_type: 'USER_LOGOUT',
+            description: 'User securely signed out of the system.'
+        }])
+    }
+
+    // 3. Complete the sign-out process and redirect
     await supabase.auth.signOut()
     router.push('/login')
     router.refresh()

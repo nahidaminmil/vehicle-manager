@@ -31,6 +31,14 @@ function LoginContent() {
       const { error } = await supabase.auth.signInWithPassword({ email: e, password: p })
       
       if (!error) {
+          // --- NEW ADDITION: LOG THE QR AUTO-LOGIN ---
+          await supabase.from('activity_logs').insert([{
+              user_email: e,
+              action_type: 'USER_LOGIN',
+              description: 'User successfully signed in via QR Code / Auto-Login.'
+          }])
+          // -------------------------------------------
+
           router.push('/')
           router.refresh()
       } else {
@@ -49,6 +57,14 @@ function LoginContent() {
       const { error } = await supabase.auth.signInWithPassword({ email, password })
       if (error) alert(error.message)
       else {
+        // --- NEW ADDITION: LOG THE STANDARD LOGIN ---
+        await supabase.from('activity_logs').insert([{
+            user_email: email,
+            action_type: 'USER_LOGIN',
+            description: 'User successfully signed in to the system.'
+        }])
+        // --------------------------------------------
+
         router.push('/')
         router.refresh()
       }
