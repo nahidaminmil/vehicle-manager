@@ -280,12 +280,12 @@ export default function Dashboard() {
         {/* Navigation Buttons - RESTORED FULL LIST & GUEST ADDED TO WORKSHOP */}
         <div className="flex flex-wrap gap-2 w-full md:w-auto items-center justify-start md:justify-end">
            
-           {/* SECURE CHAT TOGGLE BUTTON (NEW) */}
+           {/* SECURE CHAT TOGGLE BUTTON (UPDATED COLORS) */}
            {['super_admin', 'admin', 'tob_admin', 'workshop_admin'].includes(role) && (
                <div className="relative z-40">
                    <button 
                        onClick={() => setIsChatOpen(true)}
-                       className="flex items-center justify-center p-2 md:p-3 bg-white hover:bg-gray-50 text-gray-700 rounded-lg font-bold shadow-sm border border-gray-200 transition-colors"
+                       className="flex items-center justify-center p-2 md:p-3 bg-blue-50 hover:bg-blue-100 text-blue-700 rounded-lg font-bold shadow-sm border border-blue-200 transition-colors"
                    >
                        <MessageSquare className="w-5 h-5 md:w-5 md:h-5" />
                        {allUnreadMessages.length > 0 && (
@@ -297,11 +297,11 @@ export default function Dashboard() {
                </div>
            )}
 
-           {/* BELL ICON & NOTIFICATION DROPDOWN */}
+           {/* BELL ICON & NOTIFICATION DROPDOWN (UPDATED COLORS) */}
            <div className="relative z-50">
                <button 
                    onClick={() => setShowNotifications(!showNotifications)}
-                   className="flex items-center justify-center p-2 md:p-3 bg-white hover:bg-gray-50 text-gray-700 rounded-lg font-bold shadow-sm border border-gray-200 transition-colors"
+                   className="flex items-center justify-center p-2 md:p-3 bg-teal-50 hover:bg-teal-100 text-teal-800 rounded-lg font-bold shadow-sm border border-teal-200 transition-colors"
                >
                    <Bell className="w-5 h-5 md:w-5 md:h-5" />
                    {unreadCount > 0 && (
