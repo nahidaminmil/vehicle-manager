@@ -301,7 +301,8 @@ export default function Dashboard() {
                </button>
 
                {showNotifications && (
-                   <div className="absolute right-0 mt-2 w-80 bg-white rounded-xl shadow-2xl border border-gray-200 overflow-hidden transform opacity-100 scale-100 transition-all origin-top-right">
+                   // MOBILE OVERFLOW FIX APPLIED HERE: left-0 on mobile, md:right-0 on desktop, w-[85vw] on mobile
+                   <div className="absolute left-0 md:left-auto md:right-0 mt-2 w-[85vw] md:w-80 bg-white rounded-xl shadow-2xl border border-gray-200 overflow-hidden transform opacity-100 scale-100 transition-all origin-top-left md:origin-top-right">
                        <div className="bg-gray-50 border-b border-gray-100 p-3 flex justify-between items-center">
                            <span className="font-black text-gray-800 text-sm uppercase">Notifications</span>
                            {unreadCount > 0 && (
