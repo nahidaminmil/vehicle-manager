@@ -145,6 +145,9 @@ export default function Dashboard() {
       const msg = chatInput.trim();
       setChatInput(''); 
       await supabase.from('admin_messages').insert([{ sender_id: currentUserId, receiver_id: selectedChatUser.id, message: msg }]);
+      
+      // FIX: Instantly refresh the chat window to show the message you just sent
+      fetchActiveChatMessages(currentUserId, selectedChatUser.id);
   }
 
   // --- MARK NOTIFICATIONS AS READ ---
@@ -247,7 +250,7 @@ export default function Dashboard() {
   if (loading) return <div className="min-h-screen flex items-center justify-center bg-gray-100"><div className="text-xl font-black text-gray-900">Loading Command Dashboard...</div></div>
 
   return (
-    <div className="min-h-screen bg-gray-100 p-4 md:p-8 pb-24">
+    <div className="min-h-screen bg-gray-100 p-4 md:p-8 pb-24 relative overflow-hidden">
       
       {/* Top Bar */}
       <div className="flex flex-col md:flex-row justify-between items-center mb-6 gap-4">
