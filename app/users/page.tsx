@@ -16,13 +16,14 @@ export default function UserManagementPage() {
   
   // --- STATE ---
   const [editingId, setEditingId] = useState<string | null>(null)
-  const [editForm, setEditForm] = useState({ role: '', tob: '', vehicle_id: '' })
+  const [editForm, setEditForm] = useState({ role: '', tob: '', vehicle_id: '', profile_name: '' }) // ADDED profile_name
 
   const [newEmail, setNewEmail] = useState('')
   const [newPassword, setNewPassword] = useState('')
   const [newRole, setNewRole] = useState('vehicle_user')
   const [newTob, setNewTob] = useState('NDROMO')
   const [newVehicleId, setNewVehicleId] = useState('')
+  const [newProfileName, setNewProfileName] = useState('') // ADDED profile_name state
   const [creating, setCreating] = useState(false)
 
   // --- SEARCH STATE ---
@@ -36,7 +37,7 @@ export default function UserManagementPage() {
     { val: 'workshop_admin', label: '🔧 Workshop Admin' },
     { val: 'tob_admin', label: '🏰 TOB Commander' },
     { val: 'vehicle_user', label: '🚙 Vehicle User' },
-    { val: 'guest', label: '👁️ Guest / Auditor' } // <-- GUEST ROLE ADDED HERE
+    { val: 'guest', label: '👁️ Guest / Auditor' }
   ]
 
   // 1. FETCH DATA
@@ -70,12 +71,16 @@ export default function UserManagementPage() {
     if (!newEmail || !newPassword) return alert('Email and Password required')
     setCreating(true)
 
+    // Determine if role requires a profile name
+    const isAdminRole = ['super_admin', 'admin', 'workshop_admin', 'tob_admin'].includes(newRole)
+
     const formData = {
         email: newEmail,
         password: newPassword,
         role: newRole,
         assigned_tob: newRole === 'tob_admin' ? newTob : null,
-        assigned_vehicle_id: newRole === 'vehicle_user' ? newVehicleId : null
+        assigned_vehicle_id: newRole === 'vehicle_user' ? newVehicleId : null,
+        profile_name: isAdminRole ? newProfileName.trim() : null
     }
 
     const result = await adminCreateUser(formData)
@@ -83,9 +88,19 @@ export default function UserManagementPage() {
     if (!result.success) {
         alert('Error: ' + result.error)
     } else {
+        // SAFEGUARD: Directly update the profile table to ensure profile_name is saved safely
+        // without altering the existing server action configuration
+        if (isAdminRole && newProfileName) {
+            const { data: newUserProfile } = await supabase.from('profiles').select('id').eq('email', newEmail).single()
+            if (newUserProfile) {
+                await supabase.from('profiles').update({ profile_name: newProfileName.trim() }).eq('id', newUserProfile.id)
+            }
+        }
+
         alert('User Created Successfully!')
         setNewEmail('')
         setNewPassword('')
+        setNewProfileName('')
         fetchUsers()
     }
     setCreating(false)
@@ -113,16 +128,20 @@ export default function UserManagementPage() {
     setEditForm({
       role: user.role || 'vehicle_user',
       tob: user.assigned_tob || 'NDROMO',
-      vehicle_id: user.assigned_vehicle_id || ''
+      vehicle_id: user.assigned_vehicle_id || '',
+      profile_name: user.profile_name || ''
     })
   }
 
   async function saveChanges() {
     if (!editingId) return
+    const isAdminRole = ['super_admin', 'admin', 'workshop_admin', 'tob_admin'].includes(editForm.role)
+
     const updates: any = { 
         role: editForm.role,
         assigned_tob: editForm.role === 'tob_admin' ? editForm.tob : null,
-        assigned_vehicle_id: editForm.role === 'vehicle_user' ? editForm.vehicle_id : null
+        assigned_vehicle_id: editForm.role === 'vehicle_user' ? editForm.vehicle_id : null,
+        profile_name: isAdminRole ? editForm.profile_name.trim() : null
     }
     const { error } = await supabase.from('profiles').update(updates).eq('id', editingId)
     if (error) alert(error.message)
@@ -145,7 +164,8 @@ export default function UserManagementPage() {
         user.email?.toLowerCase().includes(search) ||
         user.role?.toLowerCase().includes(search) ||
         user.assigned_tob?.toLowerCase().includes(search) ||
-        vehicleUid.toLowerCase().includes(search)
+        vehicleUid.toLowerCase().includes(search) ||
+        user.profile_name?.toLowerCase().includes(search) // SEARCH BY PROFILE NAME ADDED
     )
   })
 
@@ -183,6 +203,22 @@ export default function UserManagementPage() {
                         {roles.map(r => <option key={r.val} value={r.val}>{r.label}</option>)}
                     </select>
                 </div>
+
+                {/* DYNAMIC PROFILE NAME FIELD FOR ADMIN ROLES */}
+                {['super_admin', 'admin', 'workshop_admin', 'tob_admin'].includes(newRole) && (
+                    <div className="bg-purple-50 p-3 rounded border border-purple-100">
+                        <label className="text-xs font-bold text-purple-600 uppercase">Profile Name</label>
+                        <input 
+                            type="text" 
+                            maxLength={50}
+                            value={newProfileName} 
+                            onChange={e=>setNewProfileName(e.target.value)} 
+                            className="w-full p-2 border rounded font-bold mt-1 text-purple-900" 
+                            placeholder="e.g. Maj Tariq - Ops" 
+                        />
+                    </div>
+                )}
+
                 {newRole === 'tob_admin' && (
                     <div className="bg-blue-50 p-3 rounded border border-blue-100">
                         <label className="text-xs font-bold text-blue-600 uppercase">Assign TOB</label>
@@ -214,7 +250,7 @@ export default function UserManagementPage() {
                 <Search className="w-5 h-5 text-gray-400 mr-3" />
                 <input 
                     type="text" 
-                    placeholder="Search by Email, Role, TOB, or Vehicle ID..." 
+                    placeholder="Search by Email, Name, Role, TOB, or Vehicle ID..." 
                     className="w-full outline-none font-bold text-gray-700"
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
@@ -240,12 +276,35 @@ export default function UserManagementPage() {
                                 {u.role === 'super_admin' ? <Shield className="w-6 h-6"/> : u.role === 'vehicle_user' ? <Truck className="w-6 h-6"/> : u.role === 'guest' ? <Search className="w-6 h-6"/> : <User className="w-6 h-6"/>}
                             </div>
                             <div className="w-full">
-                                <p className="font-bold text-gray-900 text-lg">{u.email}</p>
+                                
+                                {/* DISPLAY PROFILE NAME (IF ADMIN) OR EMAIL */}
+                                {u.profile_name ? (
+                                    <>
+                                        <p className="font-black text-gray-900 text-lg uppercase tracking-tight">{u.profile_name}</p>
+                                        <p className="font-bold text-gray-500 text-xs">{u.email}</p>
+                                    </>
+                                ) : (
+                                    <p className="font-bold text-gray-900 text-lg">{u.email}</p>
+                                )}
+                                
                                 {editingId === u.id ? (
                                     <div className="mt-2 grid grid-cols-1 md:grid-cols-2 gap-2 animate-in fade-in slide-in-from-top-2">
                                         <select value={editForm.role} onChange={e => setEditForm({...editForm, role: e.target.value})} className="p-1 border rounded text-sm font-bold">
                                             {roles.map(r => <option key={r.val} value={r.val}>{r.label}</option>)}
                                         </select>
+                                        
+                                        {/* EDIT PROFILE NAME FOR ADMIN ROLES */}
+                                        {['super_admin', 'admin', 'workshop_admin', 'tob_admin'].includes(editForm.role) && (
+                                            <input 
+                                                type="text" 
+                                                maxLength={50}
+                                                value={editForm.profile_name} 
+                                                onChange={e => setEditForm({...editForm, profile_name: e.target.value})} 
+                                                placeholder="Profile Name" 
+                                                className="p-1 border rounded text-sm font-bold text-purple-700" 
+                                            />
+                                        )}
+
                                         {editForm.role === 'tob_admin' && (
                                             <select value={editForm.tob} onChange={e => setEditForm({...editForm, tob: e.target.value})} className="p-1 border rounded text-sm font-bold text-blue-700">
                                                 {tobList.map(t => <option key={t} value={t}>{t}</option>)}
