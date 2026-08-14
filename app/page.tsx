@@ -286,15 +286,15 @@ export default function Dashboard() {
       <div className="flex flex-col md:flex-row justify-between items-center mb-6 gap-4">
         <div className="w-full md:w-auto">
           <h1 className="text-2xl md:text-3xl font-black text-gray-900 tracking-tight">COMMAND DASHBOARD</h1>
-          {/* UPDATED HEADER LAYOUT: Flex column on mobile, flex row on desktop */}
+          {/* UPDATED HEADER LAYOUT: Added stylized backgrounds to the fields */}
           <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-3 mt-1">
-            <p className="text-gray-600 font-bold text-xs md:text-sm">Military Vehicle Accountability System</p>
+            <p className="bg-slate-200 text-slate-700 px-2 py-0.5 rounded w-fit font-bold text-xs md:text-sm">Military Vehicle Accountability System</p>
             {role && (
                 <div className="flex items-center gap-2">
                     <span className={`px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-wider ${role === 'super_admin' ? 'bg-purple-100 text-purple-700' : 'bg-gray-200 text-gray-600'}`}>
                         {role.replace('_', ' ')}
                     </span>
-                    <span className="text-[10px] md:text-xs font-black text-gray-800 uppercase tracking-widest">
+                    <span className="bg-blue-100 text-blue-800 px-2 py-0.5 rounded text-[10px] md:text-xs font-black uppercase tracking-widest">
                         {myProfileName || myEmail}
                     </span>
                 </div>
