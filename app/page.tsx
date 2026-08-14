@@ -286,15 +286,15 @@ export default function Dashboard() {
       <div className="flex flex-col md:flex-row justify-between items-center mb-6 gap-4">
         <div className="w-full md:w-auto">
           <h1 className="text-2xl md:text-3xl font-black text-gray-900 tracking-tight">COMMAND DASHBOARD</h1>
-          <div className="flex items-center gap-2 mt-1">
+          {/* UPDATED HEADER LAYOUT: Flex column on mobile, flex row on desktop */}
+          <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-3 mt-1">
             <p className="text-gray-600 font-bold text-xs md:text-sm">Military Vehicle Accountability System</p>
-            {/* UPDATED HEADER: Now shows Profile Name dynamically */}
             {role && (
                 <div className="flex items-center gap-2">
                     <span className={`px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-wider ${role === 'super_admin' ? 'bg-purple-100 text-purple-700' : 'bg-gray-200 text-gray-600'}`}>
                         {role.replace('_', ' ')}
                     </span>
-                    <span className="text-[10px] md:text-xs font-black text-gray-800 uppercase tracking-widest hidden sm:inline-block">
+                    <span className="text-[10px] md:text-xs font-black text-gray-800 uppercase tracking-widest">
                         {myProfileName || myEmail}
                     </span>
                 </div>
@@ -565,13 +565,10 @@ export default function Dashboard() {
                                           <p className="font-black text-gray-900 group-hover:text-blue-700 truncate text-base">
                                               {admin.profile_name || 'UNNAMED ADMIN'}
                                           </p>
-                                          <p className="text-[10px] font-bold text-gray-500 truncate mb-1">{admin.email}</p>
-
-                                          <div className="flex gap-2 mt-1">
-                                              <span className="text-[9px] font-black uppercase tracking-widest bg-gray-100 text-gray-500 px-2 py-0.5 rounded">{admin.role.replace('_', ' ')}</span>
-                                              {admin.assigned_tob && <span className="text-[9px] font-black uppercase tracking-widest bg-blue-100 text-blue-700 px-2 py-0.5 rounded">{admin.assigned_tob}</span>}
-                                          </div>
+                                          {/* UI CLEANUP: Removed Role/TOB badges, left only Email */}
+                                          <p className="text-[10px] font-bold text-gray-500 truncate">{admin.email}</p>
                                       </div>
+                                      {/* Per-User Badge */}
                                       {userUnreadCount > 0 && (
                                           <span className="flex h-5 w-5 items-center justify-center rounded-full bg-red-600 text-[10px] font-black text-white shadow-sm flex-shrink-0 mt-1">
                                               {userUnreadCount}
@@ -589,9 +586,9 @@ export default function Dashboard() {
                   <div className="bg-white border-b border-gray-200 p-3 flex items-center shadow-sm z-10">
                       <button onClick={() => setSelectedChatUser(null)} className="mr-3 text-xs font-black text-gray-400 hover:text-black uppercase tracking-wider">← Back</button>
                       <div className="truncate">
-                          {/* UPDATED: Active chat header shows Profile Name */}
+                          {/* UPDATED: Active chat header shows Profile Name and Email cleanly */}
                           <p className="text-sm font-black text-gray-900 truncate">{selectedChatUser.profile_name || 'UNNAMED ADMIN'}</p>
-                          <p className="text-[9px] font-bold text-gray-500 uppercase">{selectedChatUser.role.replace('_', ' ')} • {selectedChatUser.email}</p>
+                          <p className="text-[10px] font-bold text-gray-500">{selectedChatUser.email}</p>
                       </div>
                   </div>
 
