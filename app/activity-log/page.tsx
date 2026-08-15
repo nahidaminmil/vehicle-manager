@@ -9,6 +9,7 @@ export default function ActivityLogPage() {
   const [loading, setLoading] = useState(true)
   const [logs, setLogs] = useState<any[]>([])
   const [searchTerm, setSearchTerm] = useState('')
+  const [profileMap, setProfileMap] = useState<Record<string, string>>({}) // NEW: Dictionary to hold email -> profile_name
 
   useEffect(() => {
     async function fetchLogs() {
@@ -18,6 +19,17 @@ export default function ActivityLogPage() {
       // Strictly verify Super Admin
       const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single()
       if (profile?.role !== 'super_admin') return router.push('/')
+
+      // NEW SAFEGURAD: Fetch the profiles to create an email-to-name dictionary locally.
+      // This prevents us from having to alter the actual activity_logs database table.
+      const { data: profilesData } = await supabase.from('profiles').select('email, profile_name')
+      if (profilesData) {
+          const dict: Record<string, string> = {}
+          profilesData.forEach((p: any) => {
+              if (p.profile_name) dict[p.email] = p.profile_name
+          })
+          setProfileMap(dict)
+      }
 
       const { data } = await supabase
         .from('activity_logs')
@@ -31,11 +43,14 @@ export default function ActivityLogPage() {
     fetchLogs()
   }, [])
 
-  const filteredLogs = logs.filter(log => 
-    log.user_email.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    log.action_type.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    log.description.toLowerCase().includes(searchTerm.toLowerCase())
-  )
+  // UPDATED: Search filter now checks against the mapped profile name as well as the email
+  const filteredLogs = logs.filter(log => {
+    const mappedName = profileMap[log.user_email] || log.user_email
+    return mappedName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+           log.user_email.toLowerCase().includes(searchTerm.toLowerCase()) ||
+           log.action_type.toLowerCase().includes(searchTerm.toLowerCase()) ||
+           log.description.toLowerCase().includes(searchTerm.toLowerCase())
+  })
 
   if (loading) return <div className="p-8 font-bold text-xl text-gray-800">Loading System Logs...</div>
 
@@ -57,7 +72,7 @@ export default function ActivityLogPage() {
           <Search className="w-5 h-5 text-gray-400 mr-3" />
           <input 
               type="text" 
-              placeholder="Search logs by email, action, or description..." 
+              placeholder="Search logs by name, email, action, or description..." 
               className="w-full outline-none font-bold text-gray-700"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
@@ -83,13 +98,28 @@ export default function ActivityLogPage() {
               ) : (
                 filteredLogs.map(log => (
                   <tr key={log.id} className="hover:bg-gray-50 transition-colors">
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-gray-500 flex items-center">
-                        <Clock className="w-4 h-4 mr-2 opacity-50"/> 
-                        {new Date(log.created_at).toLocaleString()}
+                    <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-gray-500">
+                        <div className="flex items-center">
+                            <Clock className="w-4 h-4 mr-2 opacity-50"/> 
+                            {new Date(log.created_at).toLocaleString()}
+                        </div>
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-black text-indigo-700 flex items-center mt-1">
-                        <User className="w-4 h-4 mr-2 opacity-50"/> 
-                        {log.user_email}
+                    <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="flex items-center">
+                            <User className="w-4 h-4 mr-2 opacity-50 text-indigo-700"/> 
+                            <div className="flex flex-col">
+                                {/* DISPLAY LOGIC: Shows Profile Name primarily, falls back to email */}
+                                <span className="text-sm font-black text-indigo-700 uppercase tracking-tight">
+                                    {profileMap[log.user_email] || log.user_email}
+                                </span>
+                                {/* Secondary Email display if a Profile Name is active */}
+                                {profileMap[log.user_email] && (
+                                    <span className="text-[10px] font-bold text-gray-500">
+                                        {log.user_email}
+                                    </span>
+                                )}
+                            </div>
+                        </div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                         <span className="px-2 py-1 bg-gray-100 text-gray-700 rounded text-xs font-black uppercase tracking-wider">
