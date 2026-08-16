@@ -1,7 +1,7 @@
 "use client"
 import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase'
-import { adminCreateUser, adminResetPassword } from '@/app/actions'
+import { adminCreateUser, adminResetPassword, adminDeleteUser } from '@/app/actions'
 import { useRouter } from 'next/navigation'
 import { 
   ArrowLeft, UserPlus, Shield, Trash2, User, Truck, MapPin, 
@@ -149,10 +149,15 @@ export default function UserManagementPage() {
   }
 
   async function handleDelete(id: string) {
-      if(!confirm('Are you sure? This deletes the user profile permissions.')) return
-      const { error } = await supabase.from('profiles').delete().eq('id', id)
-      if (error) alert(error.message)
-      else fetchUsers()
+      if(!confirm('Are you sure? This completely deletes the user and removes their login access.')) return
+      
+      const result = await adminDeleteUser(id)
+      
+      if (!result.success) {
+          alert("Error deleting user: " + result.error)
+      } else {
+          fetchUsers()
+      }
   }
 
   // --- FILTERING LOGIC ---
