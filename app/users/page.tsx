@@ -11,19 +11,20 @@ import {
 export default function UserManagementPage() {
   const router = useRouter()
   const [loading, setLoading] = useState(true)
+  const [navigating, setNavigating] = useState(false) // ADDED: Tracks routing state for the back button
   const [users, setUsers] = useState<any[]>([])
   const [vehicles, setVehicles] = useState<any[]>([])
   
   // --- STATE ---
   const [editingId, setEditingId] = useState<string | null>(null)
-  const [editForm, setEditForm] = useState({ role: '', tob: '', vehicle_id: '', profile_name: '' }) // ADDED profile_name
+  const [editForm, setEditForm] = useState({ role: '', tob: '', vehicle_id: '', profile_name: '' }) 
 
   const [newEmail, setNewEmail] = useState('')
   const [newPassword, setNewPassword] = useState('')
   const [newRole, setNewRole] = useState('vehicle_user')
   const [newTob, setNewTob] = useState('NDROMO')
   const [newVehicleId, setNewVehicleId] = useState('')
-  const [newProfileName, setNewProfileName] = useState('') // ADDED profile_name state
+  const [newProfileName, setNewProfileName] = useState('') 
   const [creating, setCreating] = useState(false)
 
   // --- SEARCH STATE ---
@@ -170,7 +171,7 @@ export default function UserManagementPage() {
         user.role?.toLowerCase().includes(search) ||
         user.assigned_tob?.toLowerCase().includes(search) ||
         vehicleUid.toLowerCase().includes(search) ||
-        user.profile_name?.toLowerCase().includes(search) // SEARCH BY PROFILE NAME ADDED
+        user.profile_name?.toLowerCase().includes(search) 
     )
   })
 
@@ -178,8 +179,21 @@ export default function UserManagementPage() {
 
   return (
     <div className="min-h-screen bg-gray-100 p-4 md:p-8">
-      <button onClick={() => router.push('/')} className="flex items-center text-gray-700 font-bold mb-6 bg-white px-4 py-2 rounded shadow-sm w-fit">
-        <ArrowLeft className="w-5 h-5 mr-2" /> Back to Command
+      {/* MODIFIED: Enhanced tactile feedback and loading state for Back Button */}
+      <button 
+        onClick={() => {
+          setNavigating(true)
+          router.push('/')
+        }} 
+        disabled={navigating}
+        className="flex items-center text-gray-700 font-bold mb-6 bg-white hover:bg-gray-50 active:bg-gray-100 active:scale-95 transition-all duration-150 ease-in-out px-4 py-2 rounded-lg shadow-sm border border-gray-200 w-fit focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-75 disabled:cursor-not-allowed"
+      >
+        {navigating ? (
+          <Loader2 className="w-5 h-5 mr-2 animate-spin text-blue-600" />
+        ) : (
+          <ArrowLeft className="w-5 h-5 mr-2" />
+        )}
+        {navigating ? 'Returning to Command...' : 'Back to Command'}
       </button>
 
       <div className="flex justify-between items-center mb-8">
