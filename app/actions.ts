@@ -163,3 +163,17 @@ export async function deleteVehicle(vehicleId: string) {
 
   return { success: true }
 }
+
+// 6. SERVER ACTION: Delete User (Super Admin)
+export async function adminDeleteUser(userId: string) {
+  try {
+      // We use supabaseAdmin to instantly delete the user from the secure auth.users vault.
+      // This will automatically cascade and delete their public.profiles row.
+      const { error } = await supabaseAdmin.auth.admin.deleteUser(userId)
+
+      if (error) return { success: false, error: error.message }
+      return { success: true }
+  } catch (err: any) {
+      return { success: false, error: err.message }
+  }
+}
